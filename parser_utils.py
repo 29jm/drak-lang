@@ -13,6 +13,7 @@ class TokenId(Enum):
     OP_GT = auto()
     OP_LT = auto()
     OP_EQ = auto()
+    OP_NEQ = auto()
     ASSIGN = auto()
     SEMICOLON = auto()
     COMMA = auto()
@@ -84,6 +85,7 @@ _token_map = {
     r'>': TokenId.OP_GT,
     r'<': TokenId.OP_LT,
     r'==': TokenId.OP_EQ,
+    r'!=': TokenId.OP_NEQ,
     # Math operators
     r'\+': TokenId.OP_PLUS,
     r'-': TokenId.OP_MINUS,

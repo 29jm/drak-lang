@@ -23,7 +23,7 @@ from parser_utils import *
 # number          = digit, { digit }
 # digit           = "0" | ... | "9"
 
-ops_0 = [TokenId.OP_EQ, TokenId.OP_GT, TokenId.OP_LT]
+ops_0 = [TokenId.OP_EQ, TokenId.OP_NEQ, TokenId.OP_GT, TokenId.OP_LT]
 ops_1 = [TokenId.OP_PLUS, TokenId.OP_MINUS]
 ops_2 = [TokenId.OP_MUL, TokenId.OP_DIV]
 

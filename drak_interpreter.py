@@ -11,6 +11,7 @@ op_map = {
     TokenId.OP_MUL: lambda x, y: x * y,
     TokenId.OP_DIV: lambda x, y: x / y,
     TokenId.OP_EQ: lambda x, y: x == y,
+    TokenId.OP_NEQ: lambda x, y: x != y,
     TokenId.OP_GT: lambda x, y: x > y,
     TokenId.OP_LT: lambda x, y: x < y
 }

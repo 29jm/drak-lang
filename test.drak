@@ -21,9 +21,13 @@ def fibonacci(n) {
     return b;
 }
 
-def returns_nothing() {
+def test_math() {
+    n = 100*(3+(15+3*6))/((3*(4-2)-1)*10);
+
+    return n == 72;
 }
 
 print(factorial(10));
 print(fibonacci(10));
-print(returns_nothing())
+
+print(test_math())
