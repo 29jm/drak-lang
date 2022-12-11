@@ -22,6 +22,7 @@ class TokenId(Enum):
     CBRACE_RIGHT = auto()
     IF = auto()
     WHILE = auto()
+    FN_DEF = auto()
 
     # Special tokens, generated while creating the AST
     FUNC_CALL = auto()
@@ -68,6 +69,7 @@ _token_map = {
     # Keywords
     r'if': TokenId.IF,
     r'while': TokenId.WHILE,
+    r'def': TokenId.FN_DEF,
     # Numbers / Identifiers
     r'[0-9]+': TokenId.NUMBER,
     r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,

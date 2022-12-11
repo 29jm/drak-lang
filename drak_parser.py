@@ -4,10 +4,11 @@ from parser_utils import *
 
 # Grammar:
 # program         = statement, { statement }
-# statement       = assignment | if-statement | while-statement | func-call
+# statement       = assignment | if-statement | while-statement | func-def | func-call
 # assignment      = identifier, "=", expression, ";"
 # if-statement    = "if", bool-expression, "{", { statement }, "}"
 # while-statement = "while", bool-expression, "{", { statement }, "}"
+# func-def        = "def", identifier, "(", { identifier, { ",", identifier } }, ")", "{", { statement }, "}"
 # func-call       = identifier, "(", { expression, { ",", expression } }, ")", ";"
 # expression      = term_0, { bool_op, term_0 }
 # bool-expression = expression, bool_op, expression
@@ -39,6 +40,8 @@ def statement(tokens: List[Token]) -> AstNode:
         tree = assignment(tokens)
     elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
         tree = func_call(tokens)
+    elif look(tokens) == TokenId.FN_DEF:
+        tree = func_def(tokens)
     elif look(tokens) == TokenId.IF:
         tree = if_statement(tokens)
     elif look(tokens) == TokenId.WHILE:
@@ -66,6 +69,33 @@ def func_call(tokens: List[AstNode]) -> AstNode:
     _ = match(tokens, TokenId.SEMICOLON)
 
     return AstNode(Token(TokenId.FUNC_CALL, fn_name.value), args)
+
+def func_def(tokens: List[AstNode]) -> AstNode:
+    _ = match(tokens, TokenId.FN_DEF)
+    name = match(tokens, TokenId.IDENTIFIER).value
+    _ = match(tokens, TokenId.RBRACE_LEFT)
+
+    params = []
+    if look(tokens) != TokenId.RBRACE_RIGHT: # Parameters
+        params.append(AstNode(match(tokens, TokenId.IDENTIFIER)))
+        while look(tokens) == TokenId.COMMA:
+            _ = match(tokens, TokenId.COMMA)
+            params.append(AstNode(match(tokens, TokenId.IDENTIFIER)))
+
+    _ = match(tokens, TokenId.RBRACE_RIGHT)
+    _ = match(tokens, TokenId.CBRACE_LEFT)
+
+    body = []
+    while look(tokens) != TokenId.CBRACE_RIGHT: # Func body
+        body.append(statement(tokens))
+
+    _ = match(tokens, TokenId.CBRACE_RIGHT)
+
+    return AstNode(Token(TokenId.FN_DEF, name),
+        [AstNode(Token(TokenId.NUMBER, str(len(params))))] + # Number of parameters
+        params                                             + # Actual parameters
+        body                                                 # Function body
+    )
 
 def if_statement(tokens: List[AstNode]) -> AstNode:
     op = match(tokens, TokenId.IF)
@@ -134,6 +164,9 @@ def term_2(tokens: List[Token]) -> AstNode: # Factors: nums and ()
     return tree
 
 source = """
+def func(a, b) {
+    foo = a + b;
+}
 foo = (3 + 5) * 2;
 if foo > 4*2 {
     foo = 42;
