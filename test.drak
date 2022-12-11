@@ -30,4 +30,4 @@ def test_math() {
 print(factorial(10));
 print(fibonacci(10));
 
-print(test_math())
+print(test_math());

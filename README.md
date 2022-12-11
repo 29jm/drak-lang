@@ -22,8 +22,9 @@ The above is Drak. Drak is also:
 + An interpreted language
 + That currently doesn't handle strings
 + Using a top-down parser
++ Giving tolerable error messages
 + The thing that made me understand parsing basics
-+ Written in Python
++ Written in Python in a weekend
 + Striving for a readable implementation
 
 As you can see there is not much to it. You can find its full grammar at the top of `drak_parser.py`.

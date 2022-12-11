@@ -30,7 +30,7 @@ class TokenId(Enum):
     FUNC_CALL = auto()
 
 class Token:
-    def __init__(self, token_id, value=None) -> None:
+    def __init__(self, token_id: TokenId, value=None) -> None:
         self.token_id = token_id
         self.value = value
 
@@ -69,10 +69,10 @@ class AstNode:
 _token_map = {
     r'\s+': None,
     # Keywords
-    r'if\s': TokenId.IF,
-    r'while\s': TokenId.WHILE,
-    r'def\s': TokenId.FN_DEF,
-    r'return\s': TokenId.RETURN,
+    r'if\b': TokenId.IF,
+    r'while\b': TokenId.WHILE,
+    r'def\b': TokenId.FN_DEF,
+    r'return\b': TokenId.RETURN,
     # Numbers / Identifiers
     r'[0-9]+': TokenId.NUMBER,
     r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,
