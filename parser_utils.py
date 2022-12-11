@@ -15,11 +15,16 @@ class TokenId(Enum):
     OP_EQ = auto()
     ASSIGN = auto()
     SEMICOLON = auto()
+    COMMA = auto()
     RBRACE_LEFT = auto()
     RBRACE_RIGHT = auto()
     CBRACE_LEFT = auto()
     CBRACE_RIGHT = auto()
     IF = auto()
+    WHILE = auto()
+
+    # Special tokens, generated while creating the AST
+    FUNC_CALL = auto()
 
 class Token:
     def __init__(self, token_id, value=None) -> None:
@@ -49,19 +54,20 @@ class AstNode:
         return self.token.value
     
     def left(self) -> AstNode:
-        if not len(self.children) == 2:
-            print("Error, accessing left/right on non-binary node")
+        # if not len(self.children) == 2:
+        #     print("Error, accessing left/right on non-binary node")
         return self.children[0]
 
     def right(self) -> AstNode:
-        if not len(self.children) == 2:
-            print("Error, accessing left/right on non-binary node")
+        # if not len(self.children) == 2:
+        #     print("Error, accessing left/right on non-binary node")
         return self.children[1]
 
 _token_map = {
     r'\s+': None,
     # Keywords
     r'if': TokenId.IF,
+    r'while': TokenId.WHILE,
     # Numbers / Identifiers
     r'[0-9]+': TokenId.NUMBER,
     r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,
@@ -83,6 +89,7 @@ _token_map = {
     r'=': TokenId.ASSIGN,
     # Misc syntax
     r';': TokenId.SEMICOLON,
+    r',': TokenId.COMMA,
 }
 
 def tokenize(src: str, token_map=_token_map) -> List[Token]:
@@ -106,5 +113,5 @@ def match(tokens: List[Token], token_id: TokenId|List[TokenId]) -> Token|None:
         return None
     return tokens.pop(0)
 
-def look(tokens: List[Token]) -> TokenId|None:
-    return tokens[0].token_id if tokens else None
+def look(tokens: List[Token], offset=0) -> TokenId|None:
+    return tokens[offset].token_id if len(tokens) > offset else None

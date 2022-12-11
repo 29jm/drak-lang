@@ -4,9 +4,11 @@ from parser_utils import *
 
 # Grammar:
 # program         = statement, { statement }
-# statement       = assignment | if-statement
+# statement       = assignment | if-statement | while-statement | func-call
 # assignment      = identifier, "=", expression, ";"
 # if-statement    = "if", bool-expression, "{", { statement }, "}"
+# while-statement = "while", bool-expression, "{", { statement }, "}"
+# func-call       = identifier, "(", { expression, { ",", expression } }, ")", ";"
 # expression      = term_0, { bool_op, term_0 }
 # bool-expression = expression, bool_op, expression
 # term_0          = term_1, { add_op, term_1 }
@@ -33,10 +35,14 @@ def program(tokens: List[Token]) -> List[AstNode]:
     return tree
 
 def statement(tokens: List[Token]) -> AstNode:
-    if look(tokens) == TokenId.IDENTIFIER:
+    if look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.ASSIGN:
         tree = assignment(tokens)
+    elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
+        tree = func_call(tokens)
     elif look(tokens) == TokenId.IF:
         tree = if_statement(tokens)
+    elif look(tokens) == TokenId.WHILE:
+        tree = while_statement(tokens)
     return tree
 
 def assignment(tokens: List[AstNode]) -> AstNode:
@@ -46,8 +52,36 @@ def assignment(tokens: List[AstNode]) -> AstNode:
     _ = match(tokens, TokenId.SEMICOLON)
     return AstNode(op, [lhs, rhs])
 
+def func_call(tokens: List[AstNode]) -> AstNode:
+    fn_name = match(tokens, TokenId.IDENTIFIER)
+    _ = match(tokens, TokenId.RBRACE_LEFT)
+
+    args = []
+    if look(tokens) != TokenId.RBRACE_RIGHT: # Arguments
+        args.append(expression(tokens))
+        while look(tokens) == TokenId.COMMA:
+            _ = match(tokens, TokenId.COMMA)
+            args.append(expression(tokens))
+    _ = match(tokens, TokenId.RBRACE_RIGHT)
+    _ = match(tokens, TokenId.SEMICOLON)
+
+    return AstNode(Token(TokenId.FUNC_CALL, fn_name.value), args)
+
 def if_statement(tokens: List[AstNode]) -> AstNode:
     op = match(tokens, TokenId.IF)
+    cond = bool_expression(tokens)
+    _ = match(tokens, TokenId.CBRACE_LEFT)
+    body = []
+
+    while look(tokens) != TokenId.CBRACE_RIGHT:
+        body.append(statement(tokens))
+
+    _ = match(tokens, TokenId.CBRACE_RIGHT)
+
+    return AstNode(op, [cond] + body)
+
+def while_statement(tokens: List[AstNode]) -> AstNode:
+    op = match(tokens, TokenId.WHILE)
     cond = bool_expression(tokens)
     _ = match(tokens, TokenId.CBRACE_LEFT)
     body = []

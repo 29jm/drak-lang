@@ -15,43 +15,57 @@ op_map = {
     TokenId.OP_LT: lambda x, y: x < y
 }
 
-def interpret_expression(expr: AstNode, vars: dict):
+def interpret_expression(expr: AstNode, pvars: dict):
     if expr.token_id() == TokenId.NUMBER:
         return int(expr.token_value())
     elif expr.token_id() == TokenId.IDENTIFIER:
-        return vars[expr.token_value()]
+        return pvars[expr.token_value()]
 
     op = op_map[expr.token_id()]
-    lhs = interpret_expression(expr.left(), vars)
-    rhs = interpret_expression(expr.right(), vars)
+    lhs = interpret_expression(expr.left(), pvars)
+    rhs = interpret_expression(expr.right(), pvars)
 
     return op(lhs, rhs)
 
-def interpret_statement(statement: AstNode, vars: dict):
+def interpret_statement(statement: AstNode, pvars: dict):
     if statement.token_id() == TokenId.ASSIGN:
         lhs = statement.left().value
-        rhs = interpret_expression(statement.right(), vars)
-        vars[lhs] = rhs
+        rhs = interpret_expression(statement.right(), pvars)
+        pvars[lhs] = rhs
     elif statement.token_id() == TokenId.IF:
-        cond = interpret_expression(statement.left(), vars)
+        cond = interpret_expression(statement.left(), pvars)
         if cond != True:
             return
         for inner_statement in statement.children[1:]:
-            interpret_statement(inner_statement, vars)
+            interpret_statement(inner_statement, pvars)
+    elif statement.token_id() == TokenId.WHILE:
+        cond = interpret_expression(statement.left(), pvars)
+        while cond:
+            for inner_statement in statement.children[1:]:
+                interpret_statement(inner_statement, pvars)
+            cond = interpret_expression(statement.left(), pvars)
+    elif statement.token_id() == TokenId.FUNC_CALL:
+        args = [interpret_expression(arg, pvars) for arg in statement.children]
+        if statement.token_value() == 'print':
+            print(*args)
+        else:
+            func = pvars[statement.token_value()]
+            print("Error, defining functions not implemented")
 
 def interpret_program(program: List[AstNode]):
-    vars = {}
+    pvars = {}
     for statement in program:
-        interpret_statement(statement, vars)
-    return vars
+        interpret_statement(statement, pvars)
+    return pvars
 
 source = """
-foo = 16;
-if foo - 5 > 10 {
-    foo = 42;
-    if foo > 40 {
-        foo = 0
-    }
+a = 0;
+b = 1;
+while b < 3000 {
+    print(a + b);
+    c = a;
+    a = b;
+    b = a + c;
 }
 """
 
