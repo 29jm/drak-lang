@@ -5,12 +5,21 @@ import re
 
 class TokenId(Enum):
     NUMBER = auto()
+    IDENTIFIER = auto()
     OP_PLUS = auto()
     OP_MINUS = auto()
     OP_MUL = auto()
     OP_DIV = auto()
+    OP_GT = auto()
+    OP_LT = auto()
+    OP_EQ = auto()
+    ASSIGN = auto()
+    SEMICOLON = auto()
     RBRACE_LEFT = auto()
     RBRACE_RIGHT = auto()
+    CBRACE_LEFT = auto()
+    CBRACE_RIGHT = auto()
+    IF = auto()
 
 class Token:
     def __init__(self, token_id, value=None) -> None:
@@ -51,13 +60,22 @@ class AstNode:
 
 _token_map = {
     r'\s+': None,
+    r'if': TokenId.IF,
     r'[0-9]+': TokenId.NUMBER,
+    r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,
     r'\(': TokenId.RBRACE_LEFT,
     r'\)': TokenId.RBRACE_RIGHT,
     r'\+': TokenId.OP_PLUS,
     r'-': TokenId.OP_MINUS,
     r'\*': TokenId.OP_MUL,
-    r'/': TokenId.OP_DIV
+    r'/': TokenId.OP_DIV,
+    r'{': TokenId.CBRACE_LEFT,
+    r'}': TokenId.CBRACE_RIGHT,
+    r'>': TokenId.OP_GT,
+    r'<': TokenId.OP_LT,
+    r'==': TokenId.OP_EQ,
+    r'=': TokenId.ASSIGN,
+    r';': TokenId.SEMICOLON,
 }
 
 def tokenize(src: str, token_map=_token_map) -> List[Token]:
