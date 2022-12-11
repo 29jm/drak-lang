@@ -15,93 +15,114 @@ op_map = {
     TokenId.OP_LT: lambda x, y: x < y
 }
 
+class DrakFunctionContext:
+    def __init__(self, func: str) -> None:
+        self.pvars = {}
+        self.function = func
+        self.returning = False
+        self.return_value = None
+
 class DrakFunction:
     def __init__(self, name: str, params: List[str], body: List[AstNode]) -> None:
         self.name = name
         self.params = params
         self.body = body
 
-def interpret_expression(expr: AstNode, pvars: dict):
+    def __repr__(self) -> str:
+        return f"DrakFunction: {self.name}({self.params})"
+
+def interpret_expression(expr: AstNode, ctx: DrakFunctionContext):
     if expr.token_id() == TokenId.NUMBER:
         return int(expr.token_value())
     elif expr.token_id() == TokenId.IDENTIFIER:
-        return pvars[expr.token_value()]
+        return ctx.pvars[expr.token_value()]
+    elif expr.token_id() == TokenId.FUNC_CALL:
+        return interpret_func_call(expr, ctx)
 
     op = op_map[expr.token_id()]
-    lhs = interpret_expression(expr.left(), pvars)
-    rhs = interpret_expression(expr.right(), pvars)
+    lhs = interpret_expression(expr.left(), ctx)
+    rhs = interpret_expression(expr.right(), ctx)
 
     return op(lhs, rhs)
 
-def interpret_statement(statement: AstNode, pvars: dict):
+def interpret_func_call(func_stmt: AstNode, ctx: DrakFunctionContext):
+    if func_stmt.token_value() == 'print':
+        args = [interpret_expression(arg, ctx) for arg in func_stmt.children]
+        print(*args)
+        return
+    func = ctx.pvars[func_stmt.token_value()]
+    if not isinstance(func, DrakFunction):
+        print(f"Error, {func_stmt.token_value()} is not a function")
+        return
+    if len(func_stmt.children) != len(func.params):
+        print(f"Error, wrong number of parameters for call to {func_stmt.token_value()}")
+        return
+    args = [interpret_expression(arg, ctx) for arg in func_stmt.children]
+    fn_ctx = DrakFunctionContext(func_stmt.token_value())
+    fn_ctx.pvars = ctx.pvars.copy() # Functions can't affect outer state, but can read/write a copy of it
+
+    for i, param in enumerate(func.params): # Set parameters to passed argument values
+        fn_ctx.pvars[param] = args[i]
+
+    for statement in func.body:
+        interpret_statement(statement, fn_ctx)
+        if fn_ctx.returning:
+            return fn_ctx.return_value
+
+def interpret_statement(statement: AstNode, ctx: DrakFunctionContext):
     if statement.token_id() == TokenId.ASSIGN:
         lhs = statement.left().value
-        rhs = interpret_expression(statement.right(), pvars)
-        pvars[lhs] = rhs
+        rhs = interpret_expression(statement.right(), ctx)
+        ctx.pvars[lhs] = rhs
     elif statement.token_id() == TokenId.IF:
-        cond = interpret_expression(statement.left(), pvars)
+        cond = interpret_expression(statement.left(), ctx)
         if cond != True:
             return
         for inner_statement in statement.children[1:]:
-            interpret_statement(inner_statement, pvars)
+            interpret_statement(inner_statement, ctx)
     elif statement.token_id() == TokenId.WHILE:
-        cond = interpret_expression(statement.left(), pvars)
+        cond = interpret_expression(statement.left(), ctx)
         while cond:
             for inner_statement in statement.children[1:]:
-                interpret_statement(inner_statement, pvars)
-            cond = interpret_expression(statement.left(), pvars)
+                interpret_statement(inner_statement, ctx)
+            cond = interpret_expression(statement.left(), ctx)
     elif statement.token_id() == TokenId.FN_DEF:
         fn_name = statement.token_value()
         num_params = int(statement.children[0].token_value())
         params = [p.token_value() for p in statement.children[1:1+num_params]]
         body = statement.children[1+num_params:]
-        pvars[fn_name] = DrakFunction(fn_name, params, body)
+        ctx.pvars[fn_name] = DrakFunction(fn_name, params, body)
     elif statement.token_id() == TokenId.FUNC_CALL:
-        if statement.token_value() == 'print':
-            args = [interpret_expression(arg, pvars) for arg in statement.children]
-            print(*args)
-        else:
-            func = pvars[statement.token_value()]
-            if not isinstance(func, DrakFunction):
-                print(f"Error, {statement.token_value()} is not a function")
-                return
-            if len(statement.children) != len(func.params):
-                print(f"Error, wrong number of parameters for call to {statement.token_value()}")
-                return
-            args = [interpret_expression(arg, pvars) for arg in statement.children]
-            fvars = pvars.copy()
-            for i, param in enumerate(func.params): # Set parameters to passed argument values
-                fvars[param] = args[i]
-            for statement in func.body:
-                interpret_statement(statement, fvars)
-            
+        interpret_func_call(statement, ctx)
+    elif statement.token_id() == TokenId.RETURN:
+        ctx.returning = True
+        ctx.return_value = interpret_expression(statement.children[0], ctx)
 
 def interpret_program(program: List[AstNode]):
-    pvars = {}
+    ctx = DrakFunctionContext('__start')
+
     for statement in program:
-        interpret_statement(statement, pvars)
-    return pvars
+        interpret_statement(statement, ctx)
+    return ctx.pvars
 
 source = """
-def fn(a, b) {
-    foo = a + b;
-    print(foo);
+def fn(n) {
+    if n == 1 {
+        return 1;
+    }
+    return n * fn(n - 1);
 }
-foo = 0;
-fn(10, 12);
-print(foo);
+print(fn(10));
 """
-# source = """
-# a = 0;
-# b = 1;
-# while b < 3000 {
-#     print(a + b);
-#     c = a;
-#     a = b;
-#     b = a + c;
-# }
-# """
 
 if __name__ == '__main__':
-    toks = parse(source)
-    print(interpret_program(toks))
+    from sys import argv
+
+    if len(argv) > 1:
+        filename = argv[1]
+        with open(filename, 'r') as fd:
+            source = fd.read()
+            interpret_program(parse(source))
+    else:
+        toks = parse(source)
+        interpret_program(toks)

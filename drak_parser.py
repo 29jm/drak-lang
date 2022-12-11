@@ -4,17 +4,19 @@ from parser_utils import *
 
 # Grammar:
 # program         = statement, { statement }
-# statement       = assignment | if-statement | while-statement | func-def | func-call
+# statement       = assignment | if-statement | while-statement | func-def | func-call-stmt | return-stmt
 # assignment      = identifier, "=", expression, ";"
 # if-statement    = "if", bool-expression, "{", { statement }, "}"
 # while-statement = "while", bool-expression, "{", { statement }, "}"
 # func-def        = "def", identifier, "(", { identifier, { ",", identifier } }, ")", "{", { statement }, "}"
-# func-call       = identifier, "(", { expression, { ",", expression } }, ")", ";"
+# func-call-stmt  = func-call, ";"
+# return-stmt     = "return", expression, ";"
+# func-call       = identifier, "(", { expression, { ",", expression } }, ")"
 # expression      = term_0, { bool_op, term_0 }
 # bool-expression = expression, bool_op, expression
 # term_0          = term_1, { add_op, term_1 }
 # term_1          = term_2, { mul_op, term_2 }
-# term_2          = number | "(", expression, ")"
+# term_2          = number | "(", expression, ")" | func-call
 # bool_op         = ">" | "<" | "=="
 # add_op          = "+" | "-"
 # mul_op          = "*" | "/"
@@ -39,13 +41,15 @@ def statement(tokens: List[Token]) -> AstNode:
     if look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.ASSIGN:
         tree = assignment(tokens)
     elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
-        tree = func_call(tokens)
+        tree = func_call_stmt(tokens)
     elif look(tokens) == TokenId.FN_DEF:
         tree = func_def(tokens)
     elif look(tokens) == TokenId.IF:
         tree = if_statement(tokens)
     elif look(tokens) == TokenId.WHILE:
         tree = while_statement(tokens)
+    elif look(tokens) == TokenId.RETURN:
+        tree = return_stmt(tokens)
     return tree
 
 def assignment(tokens: List[AstNode]) -> AstNode:
@@ -54,6 +58,11 @@ def assignment(tokens: List[AstNode]) -> AstNode:
     rhs = expression(tokens)
     _ = match(tokens, TokenId.SEMICOLON)
     return AstNode(op, [lhs, rhs])
+
+def func_call_stmt(tokens: List[AstNode]) -> AstNode:
+    tree = func_call(tokens)
+    _ = match(tokens, TokenId.SEMICOLON)
+    return tree
 
 def func_call(tokens: List[AstNode]) -> AstNode:
     fn_name = match(tokens, TokenId.IDENTIFIER)
@@ -66,7 +75,6 @@ def func_call(tokens: List[AstNode]) -> AstNode:
             _ = match(tokens, TokenId.COMMA)
             args.append(expression(tokens))
     _ = match(tokens, TokenId.RBRACE_RIGHT)
-    _ = match(tokens, TokenId.SEMICOLON)
 
     return AstNode(Token(TokenId.FUNC_CALL, fn_name.value), args)
 
@@ -123,6 +131,12 @@ def while_statement(tokens: List[AstNode]) -> AstNode:
 
     return AstNode(op, [cond] + body)
 
+def return_stmt(tokens: List[AstNode]) -> AstNode:
+    op = match(tokens, TokenId.RETURN)
+    retval = expression(tokens)
+    _ = match(tokens, TokenId.SEMICOLON)
+    return AstNode(op, [retval])
+
 def bool_expression(tokens: List[AstNode]) -> AstNode:
     expr = expression(tokens)
     if expr.token_id() not in ops_0:
@@ -153,11 +167,13 @@ def term_1(tokens: List[AstNode]) -> AstNode: # Add ops
         tree = AstNode(op, [tree, rhs])
     return tree
 
-def term_2(tokens: List[Token]) -> AstNode: # Factors: nums and ()
+def term_2(tokens: List[Token]) -> AstNode: # Factors: nums, parens, fn calls
     if look(tokens) == TokenId.RBRACE_LEFT:
         _ = match(tokens, TokenId.RBRACE_LEFT)
         tree = expression(tokens)
         _ = match(tokens, TokenId.RBRACE_RIGHT)
+    elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
+        tree = func_call(tokens)
     else:
         final = match(tokens, [TokenId.NUMBER, TokenId.IDENTIFIER])
         tree = AstNode(final)
@@ -166,12 +182,9 @@ def term_2(tokens: List[Token]) -> AstNode: # Factors: nums and ()
 source = """
 def func(a, b) {
     foo = a + b;
+    return foo;
 }
-foo = (3 + 5) * 2;
-if foo > 4*2 {
-    foo = 42;
-    bar = foo;
-}
+foo = func(1, 2) + 2;
 """
 
 if __name__ == '__main__':

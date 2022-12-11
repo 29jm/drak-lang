@@ -23,6 +23,7 @@ class TokenId(Enum):
     IF = auto()
     WHILE = auto()
     FN_DEF = auto()
+    RETURN = auto()
 
     # Special tokens, generated while creating the AST
     FUNC_CALL = auto()
@@ -67,9 +68,10 @@ class AstNode:
 _token_map = {
     r'\s+': None,
     # Keywords
-    r'if': TokenId.IF,
-    r'while': TokenId.WHILE,
-    r'def': TokenId.FN_DEF,
+    r'if\s': TokenId.IF,
+    r'while\s': TokenId.WHILE,
+    r'def\s': TokenId.FN_DEF,
+    r'return\s': TokenId.RETURN,
     # Numbers / Identifiers
     r'[0-9]+': TokenId.NUMBER,
     r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,
