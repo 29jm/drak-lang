@@ -60,21 +60,28 @@ class AstNode:
 
 _token_map = {
     r'\s+': None,
+    # Keywords
     r'if': TokenId.IF,
+    # Numbers / Identifiers
     r'[0-9]+': TokenId.NUMBER,
     r'[a-zA-Z_][a-zA-Z0-9_]*': TokenId.IDENTIFIER,
+    # Braces
+    r'{': TokenId.CBRACE_LEFT,
+    r'}': TokenId.CBRACE_RIGHT,
     r'\(': TokenId.RBRACE_LEFT,
     r'\)': TokenId.RBRACE_RIGHT,
+    # Boolean operators
+    r'>': TokenId.OP_GT,
+    r'<': TokenId.OP_LT,
+    r'==': TokenId.OP_EQ,
+    # Math operators
     r'\+': TokenId.OP_PLUS,
     r'-': TokenId.OP_MINUS,
     r'\*': TokenId.OP_MUL,
     r'/': TokenId.OP_DIV,
-    r'{': TokenId.CBRACE_LEFT,
-    r'}': TokenId.CBRACE_RIGHT,
-    r'>': TokenId.OP_GT,
-    r'<': TokenId.OP_LT,
-    r'==': TokenId.OP_EQ,
+    # Assignment operators
     r'=': TokenId.ASSIGN,
+    # Misc syntax
     r';': TokenId.SEMICOLON,
 }
 

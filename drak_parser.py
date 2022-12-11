@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from parser_utils import *
 
 # Grammar:
@@ -20,7 +22,11 @@ ops_0 = [TokenId.OP_EQ, TokenId.OP_GT, TokenId.OP_LT]
 ops_1 = [TokenId.OP_PLUS, TokenId.OP_MINUS]
 ops_2 = [TokenId.OP_MUL, TokenId.OP_DIV]
 
+def parse(source: str) -> List[AstNode]:
+    return program(tokenize(source))
+
 def program(tokens: List[Token]) -> List[AstNode]:
+    # TODO: Make some JoinStatement AstNode to keep a tree
     tree = [statement(tokens)]
     while look(tokens):
         tree.append(statement(tokens))
