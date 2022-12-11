@@ -3,13 +3,13 @@
 from parser_utils import *
 
 # Grammar:
-# expression = term, { add_op, term }
-# term       = factor, { mul_op, factor }
-# factor     = number | "(", expression, ")"
-# add_op     = "+" | "-"
-# mul_op     = "*" | "/"
-# number     = digit, { digit }
-# digit      = "0" | ... | "9"
+# expression = term, { add_op, term } ;
+# term       = factor, { mul_op, factor } ;
+# factor     = number | "(", expression, ")" ;
+# add_op     = "+" | "-" ;
+# mul_op     = "*" | "/" ;
+# number     = digit, { digit } ;
+# digit      = ? regex [0-9] ? ;
 
 add_ops = [TokenId.OP_PLUS, TokenId.OP_MINUS]
 mul_ops = [TokenId.OP_MUL, TokenId.OP_DIV]
@@ -48,7 +48,7 @@ def term(tokens: List[Token]) -> AstNode:
     return tree
 
 def evaluate(tree: AstNode) -> int:
-    if not tree.children:
+    if tree.token_id() == TokenId.NUMBER:
         return int(tree.token_value())
     return op_map[tree.token_id()](evaluate(tree.left()), evaluate(tree.right()))
 

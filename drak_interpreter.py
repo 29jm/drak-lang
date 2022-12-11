@@ -62,8 +62,8 @@ def interpret_func_call(func_stmt: AstNode, ctx: DrakFunctionContext):
     fn_ctx = DrakFunctionContext(func_stmt.token_value())
     fn_ctx.pvars = ctx.pvars.copy() # Functions can't affect outer state, but can read/write a copy of it
 
-    for i, param in enumerate(func.params): # Set parameters to passed argument values
-        fn_ctx.pvars[param] = args[i]
+    for param, arg in zip(func.params, args): # Set parameters to passed argument values
+        fn_ctx.pvars[param] = arg
 
     for statement in func.body:
         interpret_statement(statement, fn_ctx)

@@ -82,10 +82,9 @@ def term(tokens: List[Token]) -> AstNode:
     return tree
 
 def evaluate(tree: AstNode) -> int:
-    if not tree.children:
+    if tree.token_id() == TokenId.NUMBER:
         return int(tree.token_value())
     return op_map[tree.token_id()](evaluate(tree.left()), evaluate(tree.right()))
-
 ```
 
 With that you can just run `evaluate(expression(tokenize("3+4*2-(14/(6*3))")))` and get nice results.

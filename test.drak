@@ -27,7 +27,16 @@ def test_math() {
     return n == 72;
 }
 
+def with_inner(n) {
+    def inner(n) {
+        return 2*n;
+    }
+
+    return 2*inner(n);
+}
+
 print(factorial(10));
 print(fibonacci(10));
 
 print(test_math());
+print(with_inner(1));
