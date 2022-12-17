@@ -22,6 +22,7 @@ class DrakFunctionContext:
         self.function = func
         self.returning = False
         self.return_value = None
+        self.tail_call_opportunity = False
 
 class DrakFunction:
     def __init__(self, name: str, params: List[str], body: List[AstNode]) -> None:
@@ -65,10 +66,21 @@ def interpret_func_call(func_stmt: AstNode, ctx: DrakFunctionContext):
     for param, arg in zip(func.params, args): # Set parameters to passed argument values
         fn_ctx.pvars[param] = arg
 
-    for statement in func.body:
+    i = 0
+    while i < len(func.body):
+        statement = func.body[i]
         interpret_statement(statement, fn_ctx)
+        if fn_ctx.tail_call_opportunity:
+            func_stmt = statement.children[0]
+            args = [interpret_expression(arg, fn_ctx) for arg in func_stmt.children]
+            for param, arg in zip(func.params, args): # Set parameters to passed argument values
+                fn_ctx.pvars[param] = arg
+            fn_ctx.tail_call_opportunity = False
+            i = 0
+            continue
         if fn_ctx.returning:
             return fn_ctx.return_value
+        i += 1
 
 def interpret_statement(statement: AstNode, ctx: DrakFunctionContext):
     if statement.token_id() == TokenId.ASSIGN:
@@ -96,6 +108,11 @@ def interpret_statement(statement: AstNode, ctx: DrakFunctionContext):
     elif statement.token_id() == TokenId.FUNC_CALL:
         interpret_func_call(statement, ctx)
     elif statement.token_id() == TokenId.RETURN:
+        if len(statement.children) == 1:
+            fun = statement.left()
+            if fun.token_id() == TokenId.FUNC_CALL and fun.token_value() == ctx.function:
+                ctx.tail_call_opportunity = True
+                return
         ctx.returning = True
         ctx.return_value = interpret_expression(statement.children[0], ctx)
 
@@ -107,13 +124,17 @@ def interpret_program(program: List[AstNode]):
     return ctx.pvars
 
 source = """
-def fn(n) {
-    if n == 1 {
-        return 1;
+def fac2(n) {
+    def facc(n, acc) {
+        print(n);
+        if n == 1 { return acc; }
+        return facc(n - 1, acc * n);
     }
-    return n * fn(n - 1);
+
+    return facc(n, 1);
 }
-print(fn(10));
+
+print(fac2(400));
 """
 
 if __name__ == '__main__':
