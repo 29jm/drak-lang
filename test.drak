@@ -35,8 +35,20 @@ def with_inner(n) {
     return 2*inner(n);
 }
 
-print(factorial(10));
-print(fibonacci(10));
+def higher_order(func, n) {
+    return func(n + 2);
+}
+def hof(func, n) {
+    return func(n*n);
+}
 
-print(test_math());
-print(with_inner(1));
+def fac2(n) {
+    def facc(n, acc) {
+        if n == 1 { return 1; }
+        return facc(n - 1, acc * n)
+    }
+
+    return facc(n, 1);
+}
+
+fac2(4);

@@ -4,28 +4,28 @@ from parser_utils import *
 
 # Grammar:
 # program         = statement, { statement } ;
-# statement       = assignment | if-statement | while-statement |
-#                   func-def | func-call-stmt | return-stmt ;
+# statement       = assignment | if statement | while statement |
+#                   func def | func call stmt | return stmt ;
 # assignment      = identifier, "=", expression, ";" ;
-# if-statement    = "if", bool-expression, "{", { statement }, "}" ;
-# while-statement = "while", bool-expression, "{", { statement }, "}" ;
-# func-def        = "def", identifier, "(", { identifier, { ",", identifier } }, ")",
+# if statement    = "if", bool expression, "{", { statement }, "}" ;
+# while statement = "while", bool expression, "{", { statement }, "}" ;
+# func def        = "def", identifier, "(", { identifier, { ",", identifier } }, ")",
 #                   "{", { statement }, "}" ;
-# func-call-stmt  = func-call, ";" ;
-# return-stmt     = "return", expression, ";" ;
-# func-call       = identifier, "(", { expression, { ",", expression } }, ")" ;
+# func call stmt  = func call, ";" ;
+# return stmt     = "return", expression, ";" ;
+# func call       = identifier, "(", { expression, { ",", expression } }, ")" ;
 # expression      = term_0, { bool_op, term_0 } ;
-# bool-expression = expression, bool_op, expression ;
+# bool expression = expression, bool_op, expression ;
 # term_0          = term_1, { add_op, term_1 } ;
 # term_1          = term_2, { mul_op, term_2 } ;
-# term_2          = number | "(", expression, ")" | func-call ;
+# term_2          = number | "(", expression, ")" | func call ;
 # bool_op         = ">" | "<" | "==" ;
 # add_op          = "+" | "-" ;
 # mul_op          = "*" | "/" ;
 # number          = digit, { digit } ;
 # identifier      = alpha, { alpha | digit } ;
-# digit           = ? regex [0-9] ? ;
 # alpha           = ? regex [a-zA-Z_] ? ;
+# digit           = ? regex [0-9] ? ;
 
 ops_0 = [TokenId.OP_EQ, TokenId.OP_NEQ, TokenId.OP_GT, TokenId.OP_LT]
 ops_1 = [TokenId.OP_PLUS, TokenId.OP_MINUS]

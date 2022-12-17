@@ -9,25 +9,31 @@ def factorial(n) {
     return n * factorial(n - 1);
 }
 
+def hof(func, n) {
+    return func(n*n);
+}
+
 n = factorial(10);
 print(n);
+
+func = factorial;
+print(hof(func, 3));
 ```
 
 ```sh
 >> python drak_interpreter.py test.drak
->> 3628800
+>  3628800
+>  20922789888000
 ```
 
-The above is Drak. Drak is also:
-+ An interpreted language
-+ That currently doesn't handle strings
-+ Using a top-down parser
-+ Giving tolerable error messages
-+ The thing that made me understand parsing basics
-+ Written in Python in a weekend
-+ Striving for a readable implementation
+The above is Drak. Drak also:
++ uses a top-down parser
++ gives tolerable error messages
++ doesn't handle strings or arrays
 
 As you can see there is not much to it. You can find its full grammar at the top of `drak_parser.py`.
+
+The goal with it is to compile it down to some assembly language. Writing an interpreter was just too good to pass up.
 
 ## Calc parser
 
