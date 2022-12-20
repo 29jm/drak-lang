@@ -61,7 +61,7 @@ def assignment(tokens: List[AstNode]) -> AstNode:
     op = match(tokens, TokenId.ASSIGN)
     rhs = expression(tokens)
     _ = match(tokens, TokenId.SEMICOLON)
-    return AstNode(op, [lhs, rhs])
+    return AstNode(op, [AstNode(lhs), rhs])
 
 def func_call_stmt(tokens: List[AstNode]) -> AstNode:
     tree = func_call(tokens)
