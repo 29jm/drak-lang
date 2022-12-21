@@ -61,25 +61,26 @@ class FnContext:
         self.vars = {}
         self.function = func
         self.unique_counter = 0
-        self.free_registers = [f'r{n}' for n in range(4, 12)]
+        self.free_registers = list(range(4, 12))
         self.register_map = {}
+        self.reg_to_spill = 0
 
-    def get_free_reg(self) -> str:
-        return self.free_registers.pop(0)
+    def get_free_reg(self, asm: List[Instruction]) -> str:
+        if self.free_registers:
+            return f'r{self.free_registers.pop(0)}'
+        # We need to spill a register
+        to_spill = 4 + (self.reg_to_spill % 8) # Cycles [r4-r11]
+        self.reg_to_spill += 1 # Update for next time
+        asm.append(f'push {{r{to_spill}}} // Spilling')
+        return f'r{to_spill}'
 
-    def release_reg(self, reg: Reg):
-        if int(reg[1]) > 3: # Don't put arg registers in the pool
-            self.free_registers.append(reg)
-
-    def reassign_reg(self, reg: Reg, new_reg: Reg = None) -> List[Instruction]:
-        if not reg in self.register_map:
-            return ['// nothing to reassign']
-            print("Error, reassigning unused register, weird")
-        if not new_reg:
-            new_reg = self.get_free_reg()
-        self.register_map[new_reg] = self.register_map[reg] # Copy mapping
-        del self.register_map[reg] # Remove previous mapping
-        return [f'mov {new_reg}, {reg} // reassigned {reg} to {new_reg}']
+    def release_reg(self, reg: Reg, asm: List[Instruction]):
+        if self.reg_to_spill > 0:
+            self.reg_to_spill -= 1
+            unspill_reg = 4 + (self.reg_to_spill % 8)
+            asm.append([f'pop {{r{unspill_reg}}}'])
+            return
+        self.free_registers.append(int(reg[1]))
 
     def reg_for_name(self, name: str) -> Reg:
         for k, v in self.register_map.items():
@@ -102,29 +103,16 @@ def compile_expression(stmt: AstNode, target_reg: str, ctx: FnContext) -> List[I
         src_reg = ctx.reg_for_name(stmt.token_value())
         if src_reg == target_reg:
             return []
-        return [f'mov {target_reg}, {src_reg}']
+        return [f'mov {target_reg}, {src_reg} // Assigning {stmt.token_value()}']
     elif stmt.token_id() == TokenId.FUNC_CALL:
-        n_params = len(stmt.children)
-        spill_asm, spill_list = None, []
-
-        if n_params == 1:
-            spill_asm, spill_list = 'r0', ['r0']
-        elif n_params > 1:
-            spill_asm, spill_list = f'r0-r{n_params-1}', [f'r{n}' for n in range(n_params)]
-
-        if spill_asm:
-            asm += [f'push {{{spill_asm}}}'] # Spill param registers
-            # for reg in spill_list:
-            #     asm += ctx.reassign_reg(reg)
-
-        for i, arg in enumerate(stmt.children):
-            asm += compile_expression(arg, f'r{i}', ctx)
-
+        asm += ['push {r0-r3}']
+        for i, arg in enumerate(reversed(stmt.children)):
+            asm += compile_expression(arg, f'r{len(stmt.children) - i - 1}', ctx)
         asm += [f'bl {stmt.token_value()}']
-
-        if spill_asm:
-            asm += [f'pop {{{spill_asm}}}'] # Unspill param registers
-
+        asm += [f'mov {target_reg}, r0']
+        if target_reg == 'r0':
+            print(f'target reg of {stmt.token_value()} is r0, will fail')
+        asm += ['pop {r0-r3}']
         return asm
 
     op = op_map[stmt.token_id()]
@@ -135,18 +123,18 @@ def compile_expression(stmt: AstNode, target_reg: str, ctx: FnContext) -> List[I
     if allows_immediates and stmt.right().token_id() == TokenId.NUMBER:
         rhs = f'#{stmt.right().token_value()}'
     else:
-        rhs = ctx.get_free_reg()
+        rhs = ctx.get_free_reg(asm)
         asm += compile_expression(stmt.right(), rhs, ctx)
-        ctx.release_reg(rhs)
+        ctx.release_reg(rhs, asm)
 
     asm += [f'{op} {target_reg}, {rhs}']
 
     return asm
 
 def compile_assignment(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
-    reg = ctx.get_free_reg()
-    rhs = stmt.right()
     asm = []
+    reg = ctx.get_free_reg(asm)
+    rhs = stmt.right()
 
     if rhs.token_id() == TokenId.NUMBER:
         asm += [f'mov {reg}, #{rhs.token_value()}']
@@ -159,6 +147,7 @@ def compile_assignment(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
 
 def compile_funcdef(stmt, ctx: FnContext) -> List[Instruction]:
     fn_name = stmt.token_value()
+    fnctx = FnContext(fn_name)
     num_params = int(stmt.children[0].token_value())
     params = [p.token_value() for p in stmt.children[1:1+num_params]]
     body = stmt.children[1+num_params:]
@@ -166,13 +155,14 @@ def compile_funcdef(stmt, ctx: FnContext) -> List[Instruction]:
     if len(params) > 4:
         print("Error, more than 4 parameters is unsupported")
 
-    fnctx = FnContext(fn_name)
-    fnctx.register_map.update({reg: arg
-        for (reg, arg) in zip(['r0', 'r1', 'r2', 'r3'], params)})
-
-    asm = []
-    asm += [f'{fn_name}:']
+    asm = [f'{fn_name}:']
     asm += ['push {r4-r12, lr}']
+
+    for i, arg in enumerate(params):
+        reg = fnctx.get_free_reg(asm)
+        asm += [f'mov {reg}, r{i} // Saving func param {arg}']
+        fnctx.register_map[reg] = arg
+
     for sub_stmt in body:
         asm += compile_statement(sub_stmt, fnctx)
 
@@ -183,16 +173,21 @@ def compile_funcdef(stmt, ctx: FnContext) -> List[Instruction]:
     return asm
 
 def compile_func_call(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
-    return compile_expression(stmt, 'r0', ctx)
+    asm = []
+    ret_reg = ctx.get_free_reg(asm)
+    asm += compile_expression(stmt, ret_reg, ctx)
+    ctx.release_reg(ret_reg, asm)
+    return asm
 
 def compile_if(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     cond = stmt.children[0]
     jump_op = jump_op_map[cond.token_id()]
     label = f'.{ctx.function}_{ctx.get_unique()}'
+    asm = []
 
-    scratch_reg = ctx.get_free_reg()
-    asm = compile_expression(cond, scratch_reg, ctx)
-    ctx.release_reg(scratch_reg)
+    scratch_reg = ctx.get_free_reg(asm)
+    asm += compile_expression(cond, scratch_reg, ctx)
+    ctx.release_reg(scratch_reg, asm)
 
     asm += [f'{jump_op} {label}']
 
@@ -215,8 +210,11 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     elif stmt.token_id() == TokenId.IF:
         asm += compile_if(stmt, ctx)
     elif stmt.token_id() == TokenId.RETURN:
-        asm += compile_expression(stmt.children[0], 'r0', ctx)
+        ret_reg = ctx.get_free_reg(asm)
+        asm += compile_expression(stmt.children[0], ret_reg, ctx)
+        asm += [f'mov r0, {ret_reg}']
         asm += [f'b .{ctx.function}_end']
+        ctx.release_reg(ret_reg, asm)
 
     return asm
 
