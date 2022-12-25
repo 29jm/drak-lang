@@ -67,7 +67,9 @@ class FnContext:
 
     def get_free_reg(self, asm: List[Instruction]) -> str:
         if self.free_registers:
-            return f'r{self.free_registers.pop(0)}'
+            reg = self.free_registers.pop()
+            asm.append(f'// Acquiring r{reg} (free regs: {self.free_registers})')
+            return f'r{reg}'
         # We need to spill a register
         to_spill = 4 + (self.reg_to_spill % 8) # Cycles [r4-r11]
         self.reg_to_spill += 1 # Update for next time
@@ -78,9 +80,10 @@ class FnContext:
         if self.reg_to_spill > 0:
             self.reg_to_spill -= 1
             unspill_reg = 4 + (self.reg_to_spill % 8)
-            asm.append([f'pop {{r{unspill_reg}}}'])
+            asm.append([f'pop {{r{unspill_reg}}} // Unspilling'])
             return
-        self.free_registers.append(int(reg[1]))
+        asm.append(f'// Releasing {reg}')
+        self.free_registers.append(int(reg[1:]))
 
     def reg_for_name(self, name: str) -> Reg:
         for k, v in self.register_map.items():
@@ -105,14 +108,17 @@ def compile_expression(stmt: AstNode, target_reg: str, ctx: FnContext) -> List[I
             return []
         return [f'mov {target_reg}, {src_reg} // Assigning {stmt.token_value()}']
     elif stmt.token_id() == TokenId.FUNC_CALL:
-        asm += ['push {r0-r3}']
+        asm += [f'push {{r0-r3}} // Spill for call to {stmt.token_value()} | free regs: {ctx.free_registers}']
         for i, arg in enumerate(reversed(stmt.children)):
-            asm += compile_expression(arg, f'r{len(stmt.children) - i - 1}', ctx)
+            ret_reg = ctx.get_free_reg(asm)
+            asm += compile_expression(arg, ret_reg, ctx)
+            asm += [f'mov r{len(stmt.children) - i - 1}, {ret_reg}']
+            ctx.release_reg(ret_reg, asm)
         asm += [f'bl {stmt.token_value()}']
         asm += [f'mov {target_reg}, r0']
         if target_reg == 'r0':
             print(f'target reg of {stmt.token_value()} is r0, will fail')
-        asm += ['pop {r0-r3}']
+        asm += [f'pop {{r0-r3}} // Unspill after call to {stmt.token_value()} | free regs: {ctx.free_registers}']
         return asm
 
     op = op_map[stmt.token_id()]

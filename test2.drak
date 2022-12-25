@@ -16,7 +16,11 @@ def print(n) {
     print(n / 10);
 }
 
+def mul(a, b) {
+    return a * b;
+}
+
 def main() {
     print(432);
-    return 32;
+    return 32 + mod(mul(3, 15), mod(23, mul(29, 1)));
 }
