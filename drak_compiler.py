@@ -239,12 +239,17 @@ def __inline_asm_printer(asm) -> str:
     footer = ");"
     return header + body + footer
 
-def __raw_printer(asm) -> str:
+def __raw_printer(asm, strip_comments=False) -> str:
     def _indent(line: str) -> str:
         ls = line.strip()
-        if not ls.endswith(':') and not ls.startswith('.'):
+        comment = ls.find('//')
+        if strip_comments and comment != -1:
+            ls = ls[:comment].strip()
+        if ls and not ls.endswith(':') and not ls.startswith('.'):
             return '    ' + ls
         return ls
+    asm = (_indent(line) for line in asm)
+    asm = [line for line in asm if line.strip() != ""]
     return '\n'.join(_indent(line) for line in asm)
 
 if __name__ == '__main__':
@@ -254,4 +259,4 @@ if __name__ == '__main__':
         src = open(argv[1], 'r').read()
         toks = parse(src)
         asm = compile(toks)
-        print(__raw_printer(asm))
+        print(__raw_printer(asm, strip_comments=False))

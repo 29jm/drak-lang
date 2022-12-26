@@ -6,9 +6,48 @@ def mod(a, b) {
     return mod(a - b, b);
 }
 
+def count_digits(n) {
+    if n < 10 {
+        return 1;
+    }
+
+    return 1 + count_digits(n / 10);
+}
+
+def nth_power(a, n) {
+    if n == 0 {
+        return 1;
+    }
+
+    return a * nth_power(a, n-1);
+}
+
+def print_nth_digit(num, n) {
+    b = num / nth_power(10, n);
+    print_char(48 + mod(b, 10));
+}
+
+def get_nth_digit(num, n) {
+    return mod(num / nth_power(10, n), 10);
+}
+
+def print2(n) {
+    ndig = count_digits(n) - 1;
+
+    if (ndig == 0) {
+        print_char(48 + n);
+        print_char(10);
+        return 0;
+    }
+
+    print_nth_digit(n, ndig);
+    print2(n - get_nth_digit(n, ndig)*nth_power(10, ndig));
+}
+
 def print(n) {
     if n < 10 {
         print_char(48 + n);
+        print_char(10);
         return 0;
     }
 
@@ -21,6 +60,6 @@ def mul(a, b) {
 }
 
 def main() {
-    print(432);
-    return 32 + mod(mul(3, 15), mod(23, mul(29, 1)));
+    print2(48151);
+    return 0;
 }
