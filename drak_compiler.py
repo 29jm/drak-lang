@@ -31,11 +31,18 @@ op_map = {
 op_map.update({bool_op: 'cmp' for bool_op in boolean_ops})
 
 # Maps a boolean operation to the conditional jump that doesn't jump on True
-jump_op_map = {
+jump_op_map_inversed = {
     TokenId.OP_EQ: 'bne',
     TokenId.OP_NEQ: 'beq',
     TokenId.OP_GT: 'ble',
     TokenId.OP_LT: 'bge'
+}
+
+jump_op_map = {
+    TokenId.OP_EQ: 'beq',
+    TokenId.OP_NEQ: 'bne',
+    TokenId.OP_GT: 'bgt',
+    TokenId.OP_LT: 'blt'
 }
 
 # Intrinsics
@@ -139,7 +146,15 @@ def compile_expression(stmt: AstNode, target_reg: str, ctx: FnContext) -> List[I
 
 def compile_assignment(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     asm = []
-    reg = ctx.get_free_reg(asm)
+
+    lhs_name = stmt.left().token_value()
+
+    if lhs_name in ctx.register_map.values():
+        asm += [f'// Reassigning {lhs_name}']
+        reg = ctx.reg_for_name(lhs_name)
+    else:
+        reg = ctx.get_free_reg(asm)
+
     rhs = stmt.right()
 
     if rhs.token_id() == TokenId.NUMBER:
@@ -187,8 +202,8 @@ def compile_func_call(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
 
 def compile_if(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     cond = stmt.children[0]
-    jump_op = jump_op_map[cond.token_id()]
-    label = f'.{ctx.function}_{ctx.get_unique()}'
+    jump_op = jump_op_map_inversed[cond.token_id()]
+    label = f'.{ctx.function}_if_{ctx.get_unique()}'
     asm = []
 
     scratch_reg = ctx.get_free_reg(asm)
@@ -204,6 +219,28 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
 
     return asm
 
+def compile_while(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
+    cond = stmt.children[0]
+    jump_op = jump_op_map[cond.token_id()]
+    label = f'.{ctx.function}_while_begin_{ctx.get_unique()}'
+    label_cond = f'.{ctx.function}_while_cond_{ctx.get_unique()}'
+    asm = []
+
+    asm += [f'b {label_cond}']
+    asm += [f'{label}:']
+
+    for sub_stmt in stmt.children[1:]:
+        asm += compile_statement(sub_stmt, ctx)
+
+    asm += [f'{label_cond}:']
+    scratch_reg = ctx.get_free_reg(asm)
+    asm += compile_expression(cond, scratch_reg, ctx)
+    ctx.release_reg(scratch_reg, asm)
+    asm += [f'{jump_op} {label}']
+
+    return asm
+
+
 def compile_statement(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     asm = []
 
@@ -215,6 +252,8 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
         asm += compile_func_call(stmt, ctx)
     elif stmt.token_id() == TokenId.IF:
         asm += compile_if(stmt, ctx)
+    elif stmt.token_id() == TokenId.WHILE:
+        asm += compile_while(stmt, ctx)
     elif stmt.token_id() == TokenId.RETURN:
         ret_reg = ctx.get_free_reg(asm)
         asm += compile_expression(stmt.children[0], ret_reg, ctx)

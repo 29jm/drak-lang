@@ -11,19 +11,24 @@ def compile(source: Path, dest: Path):
         toks = parser.parse(src.read())
         output = compiler.compile_to_asm(toks)
         dst.write(output)
+
+    name_asm = (dest.parent / dest.stem).with_suffix('.asm')
+    name_o = (dest.parent / dest.stem).with_suffix('.o')
+    name_prog = dest.parent / dest.stem
+
     subprocess.run([
         'arm-none-eabi-as',
-        f'{dest.stem}.asm',
+        name_asm,
         '-o',
-        f'{dest.stem}.o'])
+        name_o])
     subprocess.run([
         'arm-none-eabi-gcc',
         '-march=armv7',
         '-mthumb',
         '-nostdlib',
-        f'{source.stem}.o',
+        name_o,
         '-o',
-        dest.stem])
+        name_prog])
 
 def main():
     parser = arg.ArgumentParser(
@@ -36,9 +41,9 @@ def main():
     args = parser.parse_args()
 
     if not args.output:
-        args.output = Path(f'{args.source.stem}.asm')
+        args.output = Path(f'{args.source.parent / args.source.stem}.asm')
 
-    compile(args.source, args.output)
+    compile(args.source.absolute(), args.output.absolute())
 
 if __name__ == '__main__':
     main()
