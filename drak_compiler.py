@@ -233,6 +233,9 @@ def compile(prog: List[AstNode]) -> List[Instruction]:
 
     return asm
 
+def compile_to_asm(prog: List[AstNode]) -> str:
+    return __raw_printer(compile(prog))
+
 def __inline_asm_printer(asm) -> str:
     header = "__asm__ volatile ("
     body = '\n'.join(f"\"{line}\\n\"" for line in asm)
@@ -250,7 +253,7 @@ def __raw_printer(asm, strip_comments=False) -> str:
         return ls
     asm = (_indent(line) for line in asm)
     asm = [line for line in asm if line.strip() != ""]
-    return '\n'.join(_indent(line) for line in asm)
+    return '\n'.join(_indent(line) for line in asm) + '\n'
 
 if __name__ == '__main__':
     from sys import argv
