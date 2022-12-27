@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List
 from parser_utils import AstNode, TokenId
 from drak_parser import parse
 
@@ -245,7 +245,6 @@ def compile_while(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     asm += [f'{jump_op} {label}']
 
     return asm
-
 
 def compile_statement(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
     asm = []

@@ -1,0 +1,48 @@
+def mod(a, b) {
+    if a < b {
+        return a;
+    }
+
+    return mod(a - b, b);
+}
+
+def count_digits(n) {
+    if n < 10 {
+        return 1;
+    }
+
+    return 1 + count_digits(n / 10);
+}
+
+def nth_power(a, n) {
+    if n == 0 {
+        return 1;
+    }
+
+    return a * nth_power(a, n-1);
+}
+
+def get_nth_digit(num, n) {
+    return mod(num / nth_power(10, n), 10);
+}
+
+def print_nth_digit(num, n) {
+    print_char(48 + get_nth_digit(num, n));
+}
+
+def print(n) {
+    ndig = count_digits(n) - 1;
+
+    while ndig != 0 {
+        print_nth_digit(n, ndig);
+        ndig = ndig - 1;
+    }
+
+    print_nth_digit(n, 0);
+    print_char(10);
+}
+
+def main() {
+    print(10005);
+    return 0;
+}
