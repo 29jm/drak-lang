@@ -80,7 +80,7 @@ class FnContext:
         if self.reg_to_spill > 0:
             self.reg_to_spill -= 1
             unspill_reg = 4 + (self.reg_to_spill % 8)
-            asm.append([f'pop {{r{unspill_reg}}} // Unspilling'])
+            asm.append(f'pop {{r{unspill_reg}}} // Unspilling')
             return
         asm.append(f'// Releasing {reg}')
         self.free_registers.append(int(reg[1:]))
@@ -109,15 +109,15 @@ def compile_expression(stmt: AstNode, target_reg: str, ctx: FnContext) -> List[I
         return [f'mov {target_reg}, {src_reg} // Assigning {stmt.token_value()}']
     elif stmt.token_id() == TokenId.FUNC_CALL:
         asm += [f'push {{r0-r3}} // Spill for call to {stmt.token_value()} | free regs: {ctx.free_registers}']
-        for i, arg in enumerate(reversed(stmt.children)):
+        for i, arg in enumerate(stmt.children):
             ret_reg = ctx.get_free_reg(asm)
             asm += compile_expression(arg, ret_reg, ctx)
-            asm += [f'mov r{len(stmt.children) - i - 1}, {ret_reg}']
+            asm += [f'mov r{i}, {ret_reg}']
             ctx.release_reg(ret_reg, asm)
         asm += [f'bl {stmt.token_value()}']
         asm += [f'mov {target_reg}, r0']
         if target_reg == 'r0':
-            print(f'target reg of {stmt.token_value()} is r0, will fail')
+            print(f'// target reg of {stmt.token_value()} is r0, will fail')
         asm += [f'pop {{r0-r3}} // Unspill after call to {stmt.token_value()} | free regs: {ctx.free_registers}']
         return asm
 
