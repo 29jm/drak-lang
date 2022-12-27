@@ -212,10 +212,16 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> List[Instruction]:
 
     asm += [f'{jump_op} {label}']
 
-    for sub_stmt in stmt.children[1:]:
+    for i, sub_stmt in enumerate(stmt.children[1:]):
+        if sub_stmt.token_id() == TokenId.ELSE:
+            break
+
         asm += compile_statement(sub_stmt, ctx)
 
     asm += [f'{label}:']
+
+    for sub_stmt in stmt.children[1+i].children:
+        asm += compile_statement(sub_stmt, ctx)
 
     return asm
 

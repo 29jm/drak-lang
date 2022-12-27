@@ -1,0 +1,9 @@
+def main() {
+    n = 10;
+
+    if n > 100 {
+        return 30;
+    } else {
+        return 31;
+    }
+}

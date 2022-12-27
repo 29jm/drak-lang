@@ -22,6 +22,7 @@ class TokenId(Enum):
     CBRACE_LEFT = auto()
     CBRACE_RIGHT = auto()
     IF = auto()
+    ELSE = auto()
     WHILE = auto()
     FN_DEF = auto()
     RETURN = auto()
@@ -70,6 +71,7 @@ _token_map = {
     r'\s+': None,
     # Keywords
     r'if\b': TokenId.IF,
+    r'else\b': TokenId.ELSE,
     r'while\b': TokenId.WHILE,
     r'def\b': TokenId.FN_DEF,
     r'return\b': TokenId.RETURN,

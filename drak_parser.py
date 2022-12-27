@@ -7,7 +7,8 @@ from parser_utils import *
 # statement       = assignment | if statement | while statement |
 #                   func def | func call stmt | return stmt ;
 # assignment      = identifier, "=", expression, ";" ;
-# if statement    = "if", bool expression, "{", { statement }, "}" ;
+# if statement    = "if", bool expression, "{", { statement }, "}",
+#                   [ "else", "{", { statement }, "}" ] ;
 # while statement = "while", bool expression, "{", { statement }, "}" ;
 # func def        = "def", identifier, "(", { identifier, { ",", identifier } }, ")",
 #                   "{", { statement }, "}" ;
@@ -119,6 +120,18 @@ def if_statement(tokens: List[AstNode]) -> AstNode:
         body.append(statement(tokens))
 
     _ = match(tokens, TokenId.CBRACE_RIGHT)
+
+    if look(tokens) == TokenId.ELSE: # [if, stmts*, else if, stmts*, ..]
+        else_body = []
+        else_op = match(tokens, TokenId.ELSE)
+        _ = match(tokens, TokenId.CBRACE_LEFT)
+
+        while look(tokens) != TokenId.CBRACE_RIGHT:
+            else_body.append(statement(tokens))
+
+        _ = match(tokens, TokenId.CBRACE_RIGHT)
+
+        body.append(AstNode(else_op, else_body))
 
     return AstNode(op, [cond] + body)
 
