@@ -16,11 +16,14 @@ class TokenId(Enum):
     OP_NEQ = auto()
     ASSIGN = auto()
     SEMICOLON = auto()
+    COLON = auto()
     COMMA = auto()
     RBRACE_LEFT = auto()
     RBRACE_RIGHT = auto()
     CBRACE_LEFT = auto()
     CBRACE_RIGHT = auto()
+    SBRACE_LEFT = auto()
+    SBRACE_RIGHT = auto()
     IF = auto()
     ELSE = auto()
     WHILE = auto()
@@ -29,6 +32,9 @@ class TokenId(Enum):
 
     # Special tokens, generated while creating the AST
     FUNC_CALL = auto()
+    ARRAY = auto()
+    TYPE_ID = auto()
+    DECLARATION = auto()
 
 class Token:
     def __init__(self, token_id: TokenId, value=None) -> None:
@@ -86,6 +92,8 @@ _token_map = {
     r'}': TokenId.CBRACE_RIGHT,
     r'\(': TokenId.RBRACE_LEFT,
     r'\)': TokenId.RBRACE_RIGHT,
+    r'\[': TokenId.SBRACE_LEFT,
+    r'\]': TokenId.SBRACE_RIGHT,
     # Boolean operators
     r'>': TokenId.OP_GT,
     r'<': TokenId.OP_LT,
@@ -100,6 +108,7 @@ _token_map = {
     r'=': TokenId.ASSIGN,
     # Misc syntax
     r';': TokenId.SEMICOLON,
+    r':': TokenId.COLON,
     r',': TokenId.COMMA,
 }
 
