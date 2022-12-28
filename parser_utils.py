@@ -49,7 +49,14 @@ class AstNode:
             raise Exception()
 
     def __repr__(self) -> str:
-        return f"{self.token} -> {self.children}"
+        return str(self)
+
+    def __str__(self, level=0) -> str:
+        ret = "\t" * level + repr(self.token) + "\n"
+
+        for child in self.children:
+            ret += child.__str__(level + 1)
+        return ret
     
     def token_id(self) -> TokenId:
         return self.token.token_id
@@ -58,13 +65,9 @@ class AstNode:
         return self.token.value
     
     def left(self) -> AstNode:
-        # if not len(self.children) == 2:
-        #     print("Error, accessing left/right on non-binary node")
         return self.children[0]
 
     def right(self) -> AstNode:
-        # if not len(self.children) == 2:
-        #     print("Error, accessing left/right on non-binary node")
         return self.children[1]
 
 _token_map = {
