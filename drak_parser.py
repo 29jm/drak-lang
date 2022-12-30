@@ -49,7 +49,7 @@ def program(tokens: List[Token]) -> List[AstNode]:
 def statement(tokens: List[Token]) -> AstNode:
     if look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.COLON:
         tree = declaration(tokens)
-    if look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.ASSIGN:
+    elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.ASSIGN:
         tree = assignment(tokens)
     elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
         tree = func_call_stmt(tokens)
@@ -244,7 +244,10 @@ source = """
 def fun(n: int): int {
     return n;
 }
-foo: int[] = [1, 2, 5];
+def main(): int {
+    variable: int = 0;
+    return variable;
+}
 """
 
 if __name__ == '__main__':

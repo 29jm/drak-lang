@@ -1,5 +1,5 @@
-def main() {
-    n = 10;
+def main(): int {
+    n: int = 102;
 
     if n > 100 {
         return 30;

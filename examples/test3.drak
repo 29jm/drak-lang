@@ -1,4 +1,4 @@
-def mod(a, b) {
+def mod(a: int, b: int): int {
     if a < b {
         return a;
     }
@@ -6,7 +6,7 @@ def mod(a, b) {
     return mod(a - b, b);
 }
 
-def count_digits(n) {
+def count_digits(n: int): int {
     if n < 10 {
         return 1;
     }
@@ -14,7 +14,7 @@ def count_digits(n) {
     return 1 + count_digits(n / 10);
 }
 
-def nth_power(a, n) {
+def nth_power(a: int, n: int): int {
     if n == 0 {
         return 1;
     }
@@ -22,16 +22,16 @@ def nth_power(a, n) {
     return a * nth_power(a, n-1);
 }
 
-def get_nth_digit(num, n) {
+def get_nth_digit(num: int, n: int): int {
     return mod(num / nth_power(10, n), 10);
 }
 
-def print_nth_digit(num, n) {
+def print_nth_digit(num: int, n: int): int {
     print_char(48 + get_nth_digit(num, n));
 }
 
-def print(n) {
-    ndig = count_digits(n) - 1;
+def print(n: int): none {
+    ndig: int = count_digits(n) - 1;
 
     while ndig != 0 {
         print_nth_digit(n, ndig);
@@ -42,7 +42,7 @@ def print(n) {
     print_char(10);
 }
 
-def main() {
+def main(): int {
     print(10005);
     return 0;
 }

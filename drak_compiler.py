@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import List, Dict, NamedTuple
-from parser_utils import AstNode, TokenId
+from parser_utils import AstNode, TokenId, Token
 from drak_parser import parse
 
 Asm = List[str]
@@ -112,18 +112,23 @@ class FnContext:
         self.unique_counter += 1
         return self.unique_counter
 
-def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm) -> Symbol:
+def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm) -> str:
     if stmt.token_id() == TokenId.NUMBER:
         asm.append(f'mov r{target_reg}, #{stmt.token_value()}')
         return 'int'
     elif stmt.token_id() == TokenId.IDENTIFIER:
-        if not stmt.token_value() in ctx.get_symbols():
+        if stmt.token_value() in ['true', 'false']:
+            value = 1 if stmt.token_value() == 'true' else 0
+            asm.append(f'mov r{target_reg}, #{value}')
+            return 'bool'
+        elif not stmt.token_value() in ctx.get_symbols():
             print("Error, unknown identifier on lhs of assignment")
-        src_reg = ctx.reg_for_name(stmt.token_value())
-        if src_reg == target_reg:
-            return ctx.symbols[stmt.token_value()].type
-        asm.append(f'mov r{target_reg}, r{src_reg} // Assigning {stmt.token_value()}')
-        return ctx.symbols[stmt.token_value()].type
+            return 'error'
+        else:
+            vartype, src_reg = ctx.symbols[stmt.token_value()]
+            if src_reg != target_reg: # Only move things around if needed
+                asm.append(f'mov r{target_reg}, r{src_reg} // Assigning {stmt.token_value()}')
+            return vartype
     elif stmt.token_id() == TokenId.FUNC_CALL:
         fn_name = stmt.token_value()
 
@@ -134,17 +139,37 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
 
         asm.append(f'push {{r0-r3}} // Spill for call to {fn_name} | free regs: {ctx.free_registers}')
 
-        for i, arg in enumerate(stmt.children):
-            ret_reg = ctx.get_free_reg(asm) # TBD type check arguments
-            arg_type = compile_expression(arg, ret_reg, ctx, asm)
+        paramtypes = ctx.functions[fn_name][1:]
+        for (i, arg), paramtype in zip(enumerate(stmt.children), paramtypes):
+            ret_reg = ctx.get_free_reg(asm)
+            argtype = compile_expression(arg, ret_reg, ctx, asm)
             asm.append(f'mov r{i}, r{ret_reg}')
             ctx.release_reg(ret_reg, asm)
+
+            if argtype != paramtype:
+                print(f'Error, in call to {fn_name}, expected argument of type {paramtype}, got {argtype}')
 
         asm.append(f'bl {fn_name}')
         asm.append(f'mov r{target_reg}, r0')
         asm.append(f'pop {{r0-r3}} // Unspill after call to {fn_name} | free regs: {ctx.free_registers}')
 
         return ctx.functions[fn_name][0]
+    elif stmt.token_id() in boolean_ops:
+        op = op_map[stmt.token_id()]
+        jump_op = jump_op_map[stmt.token_id()]
+        lhs_type = compile_expression(stmt.left(), target_reg, ctx, asm)
+        reg = ctx.get_free_reg(asm)
+        rhs_type = compile_expression(stmt.right(), reg, ctx, asm)
+        cond_label = f'.{ctx.function}_cond_{ctx.get_unique()}'
+        asm.extend([f'{op} r{target_reg}, r{reg}',
+                    f'mov r{target_reg}, #1',
+                    f'{jump_op} {cond_label}',
+                    f'mov r{target_reg}, #0',
+                    f'{cond_label}:'])
+        ctx.release_reg(reg, asm)
+        if lhs_type != rhs_type:
+            print(f'Error, type mismatch in boolean expression, {lhs_type} vs. {rhs_type}')
+        return 'bool'
 
     op = op_map[stmt.token_id()]
     allows_immediates = stmt.token_id() in immediate_ops
@@ -161,48 +186,67 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
         asm.append(f'{op} r{target_reg}, r{reg}')
         ctx.release_reg(reg, asm)
 
-    return 'bool' if op in boolean_ops else 'int'
+    return lhs_type
 
 def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
     asm = []
 
-    # Find type of right hand side
-
     lhs_name = stmt.left().token_value()
 
-    if lhs_name in ctx.get_symbols():
-        asm += [f'// Reassigning {lhs_name}']
-        reg = ctx.reg_for_name(lhs_name)
-    else:
-        reg = ctx.get_free_reg(asm)
-        ctx.symbols[lhs_name] = Symbol('int', reg)
+    if lhs_name not in ctx.get_symbols():
+        print(f'Assigning to undeclared variable {lhs_name}')
+
+    asm += [f'// Reassigning {lhs_name}']
+    vartype, reg = ctx.symbols[lhs_name]
 
     rhs = stmt.right()
 
-    if rhs.token_id() == TokenId.NUMBER:
+    if vartype == 'int' and rhs.token_id() == TokenId.NUMBER:
         asm += [f'mov r{reg}, #{rhs.token_value()}']
     else:
-        type = compile_expression(rhs, reg, ctx, asm) # TBD type
+        rhs_type = compile_expression(rhs, reg, ctx, asm)
+        if vartype != rhs_type:
+            print(f'Type mismatch in assignment: {vartype} in {lhs_name} vs. {rhs_type}')
+
+    return asm
+
+def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
+    asm = []
+    varname = stmt.token_value()
+    vartype = stmt.children[0].token_value()
+
+    if vartype not in ['int', 'bool']:
+        print(f'Error, declaring {vartype}s is not yet supported')
+
+    reg = ctx.get_free_reg(asm)
+    ctx.symbols[varname] = Symbol(vartype, reg)
+
+    assign_node = AstNode(Token(TokenId.ASSIGN), [stmt, stmt.children[1]])
+    asm += compile_assignment(assign_node, ctx) # TODO: hack or nice?
 
     return asm
 
 def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     fn_name = stmt.token_value()
     fnctx = FnContext(fn_name)
-    num_params = int(stmt.children[0].token_value())
-    params = [p.token_value() for p in stmt.children[1:1+num_params]]
-    body = stmt.children[1+num_params:]
+    ret_type = stmt.children[0].token_value()
+    num_params = int(stmt.children[1].token_value())
+    typed_params = [(p.token_value(), p.children[0].token_value())
+                        for p in stmt.children[2:2+num_params]]
+    body = stmt.children[2+num_params:]
 
-    if len(params) > 4:
+    if len(typed_params) > 4:
         print("Error, more than 4 parameters is unsupported")
 
-    ctx.functions[fn_name] = ['int'] + ['int' for _ in params] # TBD argtypes + ret type first
+    ctx.functions[fn_name] = [ret_type] + [t[1] for t in typed_params]
     fnctx.functions = ctx.functions.copy()
 
     asm = [f'{fn_name}:']
     asm += ['push {r4-r12, lr}']
 
-    for i, arg in enumerate(params):
+    for i, (arg, argtype) in enumerate(typed_params):
+        if argtype != 'int':
+            print(f'Error, cannot handle type {argtype} yet')
         reg = fnctx.get_free_reg(asm)
         asm += [f'mov r{reg}, r{i} // Saving func param {arg}']
         fnctx.symbols[arg] = Symbol('int', reg)
@@ -229,9 +273,15 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
     label = f'.{ctx.function}_if_{ctx.get_unique()}'
     asm = []
 
+    # TODO: reimplement bool expr eval here:
+    # the version in compile_expression does more than cmp, which is all we
+    # need here
     scratch_reg = ctx.get_free_reg(asm)
-    type = compile_expression(cond, scratch_reg, ctx, asm) # TBD check bool
+    type = compile_expression(cond, scratch_reg, ctx, asm)
     ctx.release_reg(scratch_reg, asm)
+
+    if type != 'bool':
+        print(f'Error, non-bool type in conditional expression: {type}')
 
     asm += [f'{jump_op} {label}']
 
@@ -263,16 +313,21 @@ def compile_while(stmt: AstNode, ctx: FnContext) -> Asm:
 
     asm += [f'{label_cond}:']
     scratch_reg = ctx.get_free_reg(asm)
-    type = compile_expression(cond, scratch_reg, ctx, asm) # TBD type bool
+    type = compile_expression(cond, scratch_reg, ctx, asm)
     ctx.release_reg(scratch_reg, asm)
     asm += [f'{jump_op} {label}']
+
+    if type != 'bool':
+        print(f'Error, non-bool type in conditional expression: {type}')
 
     return asm
 
 def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
     asm = []
 
-    if stmt.token_id() == TokenId.ASSIGN:
+    if stmt.token_id() == TokenId.DECLARATION:
+        asm += compile_declaration(stmt, ctx)
+    elif stmt.token_id() == TokenId.ASSIGN:
         asm += compile_assignment(stmt, ctx)
     elif stmt.token_id() == TokenId.FN_DEF:
         asm += compile_funcdef(stmt, ctx)
@@ -289,11 +344,14 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
         asm += [f'b .{ctx.function}_end']
         ctx.release_reg(ret_reg, asm)
 
+        if type != ctx.functions[ctx.function][0]:
+            print(f'Error, in {ctx.function}, expected return type {ctx.functions[ctx.function][0]}, got {type}')
+
     return asm
 
 def compile(prog: List[AstNode]) -> Asm:
     ctx = FnContext('_start')
-    ctx.functions['print_char'] = ['int']
+    ctx.functions['print_char'] = ['none', 'int']
     asm = asm_prolog
 
     for stmt in prog:
@@ -301,8 +359,8 @@ def compile(prog: List[AstNode]) -> Asm:
 
     return asm
 
-def compile_to_asm(prog: List[AstNode]) -> str:
-    return __raw_printer(compile(prog))
+def compile_to_asm(prog: List[AstNode], strip=False) -> str:
+    return __raw_printer(compile(prog), strip_comments=strip)
 
 def __inline_asm_printer(asm) -> str:
     header = "__asm__ volatile ("

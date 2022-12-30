@@ -1,0 +1,9 @@
+def main(): int {
+    n: bool = 30+2 == 16*2 - 0;
+
+    if n == true {
+        return 1;
+    } else {
+        return 0;
+    }
+}
