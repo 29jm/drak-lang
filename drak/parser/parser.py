@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-from parser_utils import *
+from drak.parser.utils import *
 
 # Grammar:
 # program         = statement, { statement } ;
 # statement       = declaration | assignment | if statement | while statement |
 #                   func def | func call stmt | return stmt ;
-# declaration     = identifier, ":", type identifier, "=", expression, ";" ;
+# declaration     = identifier, ":", type identifier, "=", expression | array litteral, ";" ;
 # assignment      = identifier, "=", expression, ";" ;
 # if statement    = "if", bool expression, "{", { statement }, "}",
 #                   [ "else", "{", { statement }, "}" ] ;
@@ -20,13 +20,14 @@ from parser_utils import *
 # bool expression = expression, bool_op, expression ;
 # term_0          = term_1, { add_op, term_1 } ;
 # term_1          = term_2, { mul_op, term_2 } ;
-# term_2          = number | "(", expression, ")" | func call | array litteral ;
+# term_2          = number | identifier, { array accessor } | "(", expression, ")" | func call ;
 # bool_op         = ">" | "<" | "==" ;
 # add_op          = "+" | "-" ;
 # mul_op          = "*" | "/" ;
 # type identifier = "int" | "bool" | array type ;
-# array type      = type, "[]" ;
+# array type      = type identifier, "[]" ;
 # array litteral  = "[", { expression, { ",", expression } }, "]"
+# array accessor  = "[", expression, "]"
 # number          = digit, { digit } ;
 # identifier      = alpha, { alpha | digit } ;
 # alpha           = ? regex [a-zA-Z_] ? ;
@@ -68,8 +69,26 @@ def declaration(tokens: List[AstNode]) -> AstNode:
     _ = match(tokens, TokenId.COLON)
     type_id = type_identifier(tokens)
     _ = match(tokens, TokenId.ASSIGN)
-    rhs = expression(tokens)
+
+    if look(tokens) == TokenId.SBRACE_LEFT:
+        _ = match(tokens, TokenId.SBRACE_LEFT)
+        elems = []
+
+        while look(tokens) != TokenId.SBRACE_RIGHT:
+            elems.append(expression(tokens))
+
+            if look(tokens) != TokenId.COMMA:
+                continue # Expect SBRACE_RIGHT
+
+            _ = match(tokens, TokenId.COMMA)
+        _ = match(tokens, TokenId.SBRACE_RIGHT)
+
+        rhs = AstNode(Token(TokenId.ARRAY), elems)
+    else:
+        rhs = expression(tokens)
+
     _ = match(tokens, TokenId.SEMICOLON)
+
     return AstNode(Token(TokenId.DECLARATION, lhs.value), [type_id, rhs])
 
 def assignment(tokens: List[AstNode]) -> AstNode:
@@ -209,25 +228,21 @@ def term_2(tokens: List[Token]) -> AstNode: # Factors: nums, parens, fn calls
         _ = match(tokens, TokenId.RBRACE_LEFT)
         tree = expression(tokens)
         _ = match(tokens, TokenId.RBRACE_RIGHT)
-    elif look(tokens) == TokenId.SBRACE_LEFT:
-        _ = match(tokens, TokenId.SBRACE_LEFT)
-        elems = []
-
-        while look(tokens) != TokenId.SBRACE_RIGHT:
-            elems.append(expression(tokens))
-
-            if look(tokens) != TokenId.COMMA:
-                continue # Expect SBRACE_RIGHT
-
-            _ = match(tokens, TokenId.COMMA)
-        _ = match(tokens, TokenId.SBRACE_RIGHT)
-
-        tree = AstNode(Token(TokenId.ARRAY), elems)
     elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
         tree = func_call(tokens)
-    else:
+    elif look(tokens) == TokenId.NUMBER:
         final = match(tokens, [TokenId.NUMBER, TokenId.IDENTIFIER])
         tree = AstNode(final)
+    elif look(tokens) == TokenId.IDENTIFIER:
+        final = match(tokens, [TokenId.NUMBER, TokenId.IDENTIFIER])
+        array_accessors = []
+
+        while look(tokens) == TokenId.SBRACE_LEFT:
+            _ = match(tokens, TokenId.SBRACE_LEFT)
+            array_accessors.append(expression(tokens))
+            _ = match(tokens, TokenId.SBRACE_RIGHT)
+            
+        tree = AstNode(final, array_accessors)
     return tree
 
 def type_identifier(tokens: List[Token]) -> AstNode:
@@ -241,12 +256,12 @@ def type_identifier(tokens: List[Token]) -> AstNode:
     return AstNode(Token(TokenId.TYPE_ID, typename))
 
 source = """
-def fun(n: int): int {
-    return n;
-}
 def main(): int {
-    variable: int = 0;
-    return variable;
+    variable: int[] = [1, 2, 3];
+    n: int = variable[3];
+    return n;
+
+    funcA(funcB(1, 2) + funcE(funcF(3, 4, 5, 6)), funcC(funcD(1), 2), 8,  3*4+funcG());
 }
 """
 

@@ -1,0 +1,6 @@
+def main(): int {
+    arr: int[] = [1, 2, 3];
+    n: int = arr[1] + 14;
+
+    return n;
+}

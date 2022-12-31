@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from parser_utils import *
+from drak.parser.utils import *
 
 # Grammar:
 # expression = term, { add_op, term } ;

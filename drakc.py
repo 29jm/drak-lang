@@ -2,8 +2,8 @@
 
 import argparse as arg
 from pathlib import Path
-import drak_parser as parser
-import drak_compiler as compiler
+import drak.parser.parser as parser
+import drak.compiler.compiler as compiler
 import subprocess
 
 def compile(source: Path, dest: Path, strip: bool):
