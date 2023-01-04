@@ -17,15 +17,17 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
         else:
             vartype, src_reg = ctx.symbols[stmt.token_value()]
             if vartype.dimensions and stmt.children: # array type, check for indices
+                dimensions = vartype.dimensions[:] # Copy dimensions to avoid modifying type
                 offset_current = ctx.get_free_reg(asm)
                 asm.append(f'mov r{target_reg}, r{src_reg}')
+                asm.append(f'add r{target_reg}, #4') # Array size is first uint32; skip it
                 for index_stmt in stmt.children:
                     _ = compile_expression(index_stmt, offset_current, ctx, asm) # check int TODO
                     asm.append(f'add r{target_reg}, r{offset_current}, lsl #2') # TODO size to move offset
-                    vartype.dimensions.pop(0)
+                    dimensions.pop(0)
                 asm.append(f'ldr r{target_reg}, [r{target_reg}, #0]')
                 ctx.release_reg(offset_current, asm)
-                return vartype
+                return IdType(vartype.base_type, dimensions)
             elif src_reg != target_reg: # Scalars: only move things around if needed
                 asm.append(f'mov r{target_reg}, r{src_reg} // Assigning {stmt.token_value()}')
             return vartype

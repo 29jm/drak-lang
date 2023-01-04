@@ -7,7 +7,7 @@ from drak.parser.utils import *
 # statement       = declaration | assignment | if statement | while statement |
 #                   func def | func call stmt | return stmt ;
 # declaration     = identifier, ":", type identifier, "=", expression | array litteral, ";" ;
-# assignment      = identifier, "=", expression, ";" ;
+# assignment      = identifier, { array accessor }, "=", expression, ";" ;
 # if statement    = "if", bool expression, "{", { statement }, "}",
 #                   [ "else", "{", { statement }, "}" ] ;
 # while statement = "while", bool expression, "{", { statement }, "}" ;
@@ -50,7 +50,7 @@ def program(tokens: List[Token]) -> List[AstNode]:
 def statement(tokens: List[Token]) -> AstNode:
     if look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.COLON:
         tree = declaration(tokens)
-    elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.ASSIGN:
+    elif lookmatch(tokens, assignment):
         tree = assignment(tokens)
     elif look(tokens) == TokenId.IDENTIFIER and look(tokens, 1) == TokenId.RBRACE_LEFT:
         tree = func_call_stmt(tokens)
@@ -93,10 +93,17 @@ def declaration(tokens: List[AstNode]) -> AstNode:
 
 def assignment(tokens: List[AstNode]) -> AstNode:
     lhs = match(tokens, TokenId.IDENTIFIER)
+    indices = []
+
+    while look(tokens) == TokenId.SBRACE_LEFT:
+        _ = match(tokens, TokenId.SBRACE_LEFT)
+        indices.append(expression(tokens))
+        _ = match(tokens, TokenId.SBRACE_RIGHT)
+
     op = match(tokens, TokenId.ASSIGN)
     rhs = expression(tokens)
     _ = match(tokens, TokenId.SEMICOLON)
-    return AstNode(op, [AstNode(lhs), rhs])
+    return AstNode(op, [AstNode(lhs, indices), rhs])
 
 def func_call_stmt(tokens: List[AstNode]) -> AstNode:
     tree = func_call(tokens)
@@ -257,11 +264,11 @@ def type_identifier(tokens: List[Token]) -> AstNode:
 
 source = """
 def main(): int {
-    variable: int[] = [1, 2, 3];
-    n: int = variable[3];
-    return n;
+    arr: int[] = [1, 2, 3];
+    n: int = arr[1] + 14;
+    arr[1] = 98;
 
-    funcA(funcB(1, 2) + funcE(funcF(3, 4, 5, 6)), funcC(funcD(1), 2), 8,  3*4+funcG());
+    return n;
 }
 """
 

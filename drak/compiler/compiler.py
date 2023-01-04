@@ -30,22 +30,34 @@ asm_prolog = """
 def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
     asm = []
 
-    lhs_name = stmt.left().token_value()
+    lhs = stmt.left()
+    lhs_name = lhs.token_value()
 
     if lhs_name not in ctx.get_symbols():
         print(f'Assigning to undeclared variable {lhs_name}')
 
     asm += [f'// Reassigning {lhs_name}']
-    vartype, reg = ctx.symbols[lhs_name]
+    lhs_type, reg = ctx.symbols[lhs_name]
 
     rhs = stmt.right()
 
-    if vartype == IntType and rhs.token_id() == TokenId.NUMBER:
+    if lhs.children: # LHS has array subscript(s)
+        if len(lhs_type.dimensions) != len(lhs.children):
+            print("Error, reassigning array, or not enough indices")
+        asm.append(f'mov r0, #4') # We'll use r0 for total index, r1 for partials
+        for index_stmt in lhs.children:
+            index_type = compile_expression(index_stmt, 1, ctx, asm)
+            asm.append(f'add r0, r1')
+        tmp = ctx.get_free_reg(asm)
+        rhs_type = compile_expression(rhs, tmp, ctx, asm)
+        asm.append(f'str r{tmp}, [r{reg}, r0, lsl #2]')
+        ctx.release_reg(tmp, asm)
+    elif lhs_type == IntType and rhs.token_id() == TokenId.NUMBER:
         asm += [f'mov r{reg}, #{rhs.token_value()}']
     else: # TODO some array assign here, for both LHS and RHS, move what's in decl
         rhs_type = compile_expression(rhs, reg, ctx, asm)
-        if vartype != rhs_type:
-            print(f'Type mismatch in assignment: {vartype} in {lhs_name} vs. {rhs_type}')
+        if lhs_type != rhs_type:
+            print(f'Type mismatch in assignment: {lhs_type} in {lhs_name} vs. {rhs_type}')
 
     return asm
 
@@ -61,23 +73,28 @@ def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
     if rhs.token_id() == TokenId.ARRAY:
         # Find out the array size
         vartype.dimensions = [len(rhs.children)]
+        ctx.symbols[varname].type.dimensions = vartype.dimensions
         array_size = vartype.dimensions[0] * 4 # TODO: type_of_expr function really needed
-        # Allocate aligned stack, point it to next empty slot
-        aligned = (array_size + 4 + 7) & ~7
+        # Allocate aligned stack, with room for array size, point it to next empty slot
+        aligned = (array_size + (4 + 4) + 7) & ~7
         asm.append(f'sub sp, #{aligned}')
         asm.append(f'mov r{reg}, sp // Array decl: {varname}')
         asm.append(f'add r{reg}, #4')
+        asm.append(f'mov r0, #{array_size}')
+        asm.append(f'str r0, [r{reg}, #0]')
 
         tmp = ctx.get_free_reg(asm)
         for i, val in enumerate(rhs.children):
             _ = compile_expression(val, tmp, ctx, asm)
-            asm.append(f'str r{tmp}, [r{reg}, #{4*i}]')
+            asm.append(f'str r{tmp}, [r{reg}, #{4*(i+1)}]')
         ctx.release_reg(tmp, asm)
         ctx.stack_used += aligned
     elif vartype not in [IntType, BoolType]:
         print(f'Error, declaring {vartype}s is not yet supported')
     else:
-        assign_node = AstNode(Token(TokenId.ASSIGN), [stmt, stmt.children[1]])
+        assign_node = AstNode(Token(TokenId.ASSIGN), [
+            AstNode(Token(TokenId.IDENTIFIER, stmt.token_value())),
+            stmt.children[1]])
         asm += compile_assignment(assign_node, ctx) # TODO: hack or nice?
 
     return asm
@@ -101,11 +118,11 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     asm += ['push {r4-r12, lr}']
 
     for i, (arg, argtype) in enumerate(typed_params):
-        if argtype != IntType:
+        if argtype not in [IntType, BoolType]:
             print(f'Error, cannot handle type {argtype} yet')
         reg = fnctx.get_free_reg(asm)
         asm += [f'mov r{reg}, r{i} // Saving func param {arg}']
-        fnctx.symbols[arg] = Symbol(IntType, reg)
+        fnctx.symbols[arg] = Symbol(argtype, reg)
 
     for sub_stmt in body:
         asm += compile_statement(sub_stmt, fnctx)

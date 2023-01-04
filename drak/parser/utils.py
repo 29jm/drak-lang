@@ -112,6 +112,10 @@ _token_map = {
     r',': TokenId.COMMA,
 }
 
+class ParseError(Exception):
+    def __init__(self, message: object) -> None:
+        super().__init__(message)
+
 def tokenize(src: str, token_map=_token_map) -> List[Token]:
     parts = []
     while src:
@@ -126,12 +130,16 @@ def match(tokens: List[Token], token_id: TokenId|List[TokenId]) -> Token|None:
     tok = look(tokens)
     token_id = token_id if isinstance(token_id, list) else [token_id]
     if not tok:
-        print(f"Error, expected {token_id}, got nothing")
-        return None
+        raise ParseError(f"Error, expected {token_id}, got nothing")
     if not (tok in token_id):
-        print(f"Error, expected {token_id}, got {tok}: {tokens[0]}")
-        return None
+        raise ParseError(f"Error, expected {token_id}, got {tok}: {tokens[0]}")
     return tokens.pop(0)
 
 def look(tokens: List[Token], offset=0) -> TokenId|None:
     return tokens[offset].token_id if len(tokens) > offset else None
+
+def lookmatch(tokens: List[Token], matcher, offset=0) -> bool:
+    try:
+        return matcher(tokens[offset:]) != None
+    except:
+        return False
