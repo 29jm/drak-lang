@@ -20,19 +20,13 @@ class Node:
         return f'{self.var} -> {self.links}'
 
 def GEN(sblock):
-    if sblock[1] != I.NODEPS:
-        return set(sblock[1])
-    return set()
+    return set(READREGS(sblock))
 
 def KILL(sblock, suffixes: dict):
-    if sblock[0] != I.USE:
-        suffixes[sblock[0]] = suffixes.get(sblock[0], 0) + 1
-        # if sblock[0] not in suffixes:
-        #     suffixes[sblock[0]] = 1
-        # else:
-        #     suffixes[sblock[0]] = suffixes[sblock[0]] + 1
-        return set([sblock[0]])
-    return set()
+    written = WRITREGS(sblock)
+    for writ in written:
+        suffixes[writ] = suffixes.get(writ, 0) + 1
+    return set(written)
 
 def apply_suffixes(variables: set, suffixes: dict) -> list:
     suffixed = set()
@@ -100,27 +94,27 @@ def interference_graph(liveness: list) -> List[Node]:
 
 def coalesce(blocks: list, lifetimes: list, igraph: dict) -> list:
     for i in range(len(blocks)):
-        a, b = blocks[i]
-        if a == I.USE or b == I.NODEPS:
+        a, b = WRITREGS(blocks[i]), READREGS(blocks[i])
+        if not a or not b: # Either no write or no read
             continue
-        copy_related = len(b) == 1
-        interfere = a in igraph[b[0]]
+        copy_related = blocks[i][0] == 'mov' and len(b) == 1
+        interfere = len(a) == 1 and a[0] in igraph[b[0]]
         if copy_related and not interfere: # Coalesce
-            blocks = rename(blocks, a, b[0])
-            lifetimes = [set(rename(life, a, b[0])) for life in lifetimes]
+            blocks = rename(blocks, a[0], b[0])
+            lifetimes = [set(rename(life, a[0], b[0])) for life in lifetimes]
     return lifetimes, blocks
 
 def simplify(blocks: list, lifetimes: list) -> list:
     """Deletes:
         - mov a, a
-        - mov a, [deps]|nodeps // when a is dead everywhere
+        - movlike a, [deps]|nodeps // when a is dead everywhere
     """
     simplified = []
     for block in blocks:
-        a, b = block
-        if a != I.USE and b != I.NODEPS and len(b) == 1 and a == b[0]:
+        a, b = WRITREGS(block), READREGS(block)
+        if block[0] == 'mov' and a and b and len(b) == 1 and len(a) == 1 and a[0] == b[0]:
             continue
-        elif a != I.USE and not any(a in life for life in lifetimes):
+        elif a and len(a) == 1 and not any(a[0] in life for life in lifetimes):
             continue
         simplified.append(block)
     return simplified
@@ -131,6 +125,33 @@ def allocate(blocks: list, variables: set, registers: list) -> list:
         blocks = rename(blocks, var, reg)
     return blocks
 
+def _all_non_litteral(operands: list) -> list:
+    nonlit = []
+    for op in operands:
+        if isinstance(op, str) and op.startswith('REG'):
+            nonlit.append(op)
+        elif isinstance(op, list):
+            nonlit.extend(_all_non_litteral(op))
+    return nonlit
+
+def READREGS(instr) -> list:
+    """Returns registers read by @instr."""
+    if instr[0] in ['cmp', 'push', 'jmp'] or instr[0].startswith('b'):
+        return _all_non_litteral(instr[1:])
+    elif instr[0] == 'str':
+        return _all_non_litteral(instr[1:2])
+    return _all_non_litteral(instr[2:])
+
+def WRITREGS(instr) -> list:
+    """Returns registers written to by @instr."""
+    if instr[0] == 'cmp':
+        return []
+    elif instr[0] == 'pop':
+        return _all_non_litteral(instr[1:])
+    elif instr[0] == 'str':
+        return _all_non_litteral(instr[2:])
+    return _all_non_litteral(instr[1:2])
+
 asm = [
     [
         ['A', I.NODEPS],
@@ -140,10 +161,18 @@ asm = [
         ['C', ['B', 'D']],
         [I.USE, ['B', 'C']],
     ],
+    [
+        ['mov', 'REG4', '#100'],
+        ['mov', 'REG7', '#101'],
+        ['mov', 'REG5', 'REG4'],
+        ['mov', 'REG4', '#110'],
+        ['add', 'REG6', 'REG5', 'REG7'],
+        ['sub', 'r0', 'REG5', 'REG6'],
+    ]
 ]
 
 if __name__ == '__main__':
-    blocks = asm[0]
+    blocks = asm[1]
     length = len(blocks)
     new_length = length
     run = False
