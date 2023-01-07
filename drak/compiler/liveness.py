@@ -8,6 +8,9 @@ class I(Enum):
     NODEPS = auto()
     USE = auto()
 
+    def __repr__(self) -> str:
+        return str(self.name)
+
 class Node:
     def __init__(self, var, links: set=set()):
         self.var = var
@@ -23,21 +26,28 @@ def GEN(sblock):
 
 def KILL(sblock, suffixes: dict):
     if sblock[0] != I.USE:
-        if sblock[0] not in suffixes:
-            suffixes[sblock[0]] = 1
-        else:
-            suffixes[sblock[0]] = suffixes[sblock[0]] + 1
+        suffixes[sblock[0]] = suffixes.get(sblock[0], 0) + 1
+        # if sblock[0] not in suffixes:
+        #     suffixes[sblock[0]] = 1
+        # else:
+        #     suffixes[sblock[0]] = suffixes[sblock[0]] + 1
         return set([sblock[0]])
     return set()
 
 def apply_suffixes(variables: set, suffixes: dict) -> list:
-    return set(f'{v}_{suffixes.get(v, 1)}' for v in variables)
+    suffixed = set()
+    for var in variables:
+        if var in suffixes:
+            suffixed.add(f'{var}.{suffixes[var]}')
+        else:
+            suffixed.add(var)
+    return suffixed
 
 def renumber(block: list, suffixes: dict) -> list:
     renumbered = []
     for elem in block:
         if isinstance(elem, str):
-            renumbered.append(apply_suffixes(elem, suffixes).pop())
+            renumbered.append(apply_suffixes(set([elem]), suffixes).pop())
         elif isinstance(elem, list):
             renumbered.append(renumber(elem, suffixes))
         else:
@@ -55,20 +65,21 @@ def rename(block: list, source: str, dest: str) -> list:
             renamed.append(elem)
     return renamed
 
-def liveness(blocks: list) -> list:
+def liveness(blocks: list) -> tuple:
     live = set()
     livetimes = []
     suffixes = {}
     renumbered = []
 
+    from copy import copy
+
     for block in reversed(blocks):
-        new_suffixes = suffixes.copy()
+        old_suffixes = copy(suffixes)
         alived = GEN(block)
-        killed = KILL(block, new_suffixes)
+        killed = KILL(block, suffixes)
         live = (live - killed) | alived
-        livetimes.append(apply_suffixes(live, suffixes))
-        renumbered.append(renumber(block, suffixes))
-        suffixes = new_suffixes
+        livetimes.append(apply_suffixes(live, old_suffixes))
+        renumbered.append(renumber(block, old_suffixes))
     
     return list(reversed(livetimes)), list(reversed(renumbered))
 
@@ -87,7 +98,7 @@ def interference_graph(liveness: list) -> List[Node]:
     
     return nodes
 
-def coalesce(blocks: list, igraph: dict) -> list:
+def coalesce(blocks: list, lifetimes: list, igraph: dict) -> list:
     for i in range(len(blocks)):
         a, b = blocks[i]
         if a == I.USE or b == I.NODEPS:
@@ -96,36 +107,66 @@ def coalesce(blocks: list, igraph: dict) -> list:
         interfere = a in igraph[b[0]]
         if copy_related and not interfere: # Coalesce
             blocks = rename(blocks, a, b[0])
+            lifetimes = [set(rename(life, a, b[0])) for life in lifetimes]
+    return lifetimes, blocks
+
+def simplify(blocks: list, lifetimes: list) -> list:
+    """Deletes:
+        - mov a, a
+        - mov a, [deps]|nodeps // when a is dead everywhere
+    """
+    simplified = []
+    for block in blocks:
+        a, b = block
+        if a != I.USE and b != I.NODEPS and len(b) == 1 and a == b[0]:
+            continue
+        elif a != I.USE and not any(a in life for life in lifetimes):
+            continue
+        simplified.append(block)
+    return simplified
+
+def allocate(blocks: list, variables: set, registers: list) -> list:
+    for var in variables:
+        reg = registers.pop(0)
+        blocks = rename(blocks, var, reg)
     return blocks
 
 asm = [
     [
         ['A', I.NODEPS],
+        ['D', I.NODEPS],
         ['B', ['A']],
         ['A', I.NODEPS],
         ['C', ['B', 'D']],
-        [I.USE, ['B']],
+        [I.USE, ['B', 'C']],
     ],
-    # [
-    #     [I.C, [I.A, I.B]],
-    #     [I.D, I.NODEPS]
-    # ],
-    # [
-    #     [I.C, I.NODEPS],
-    #     [I.USE, [I.B, I.D, I.C]]
-    # ]
 ]
 
 if __name__ == '__main__':
-    # tree = parse(source)
-    # print(tree[0].children[2])
-    # compile_func_call(tree[0].children[2])
     blocks = asm[0]
-    lifetimes, blocksn = liveness(blocks)
-    print(blocks)
-    print(blocksn)
-    print(lifetimes)
-    igraph = interference_graph(lifetimes)
-    print(igraph)
-    coalesced = coalesce(blocksn, lifetimes, igraph)
-    print(coalesced)
+    length = len(blocks)
+    new_length = length
+    run = False
+    while not run or new_length < length:
+        length = len(blocks)
+        lifetimes, blocksn = liveness(blocks)
+        print('initial blocks: ', blocks)
+        print('numbered blocks:', blocksn)
+        print('liveness per instruction:', lifetimes)
+
+        igraph = interference_graph(lifetimes)
+        lifetimes, coalesced = coalesce(blocksn, lifetimes, igraph)
+        simplified = simplify(coalesced, lifetimes)
+        print('igraph', igraph)
+        print('coalesced:', coalesced)
+        print('simplified:', simplified)
+
+        new_length = len(simplified)
+        blocks = simplified
+        run = True
+        print(f'iteration done: lengths {length} -> {new_length}')
+    vars = set()
+    for lives in lifetimes:
+        vars |= lives
+    allocated = allocate(blocks, vars, [f'r{i}' for i in range(4, 13)])
+    print('allocated:', allocated)
