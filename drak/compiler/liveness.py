@@ -1,35 +1,21 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from enum import Enum, auto
-from typing import List
+from functools import reduce
+from typing import List, Tuple, Set, Dict
+from drak.compiler.ir_utils import *
 
-class I(Enum):
-    NODEPS = auto()
-    USE = auto()
+def GEN(instr: Instr) -> Set[str]:
+    return set(vars_read_by(instr))
 
-    def __repr__(self) -> str:
-        return str(self.name)
-
-class Node:
-    def __init__(self, var, links: set=set()):
-        self.var = var
-        self.links = links
-
-    def __repr__(self) -> str:
-        return f'{self.var} -> {self.links}'
-
-def GEN(sblock):
-    return set(READREGS(sblock))
-
-def KILL(sblock, suffixes: dict):
-    written = WRITREGS(sblock)
+def KILL(instr: Instr, suffixes: Dict[str, int]) -> Set[str]:
+    written = vars_written_by(instr)
     for writ in written:
         suffixes[writ] = suffixes.get(writ, 0) + 1
     return set(written)
 
-def apply_suffixes(variables: set, suffixes: dict) -> list:
-    suffixed = set()
+def apply_suffixes(variables: LiveSet, suffixes: Dict[str, int]) -> list:
+    suffixed: Set[str] = set()
     for var in variables:
         if var in suffixes:
             suffixed.add(f'{var}.{suffixes[var]}')
@@ -37,9 +23,9 @@ def apply_suffixes(variables: set, suffixes: dict) -> list:
             suffixed.add(var)
     return suffixed
 
-def renumber(block: list, suffixes: dict) -> list:
+def renumber(instr: Instr, suffixes: Dict[str, int]) -> List[str]:
     renumbered = []
-    for elem in block:
+    for elem in instr:
         if isinstance(elem, str):
             renumbered.append(apply_suffixes(set([elem]), suffixes).pop())
         elif isinstance(elem, list):
@@ -48,8 +34,8 @@ def renumber(block: list, suffixes: dict) -> list:
             renumbered.append(elem)
     return renumbered
 
-def rename(block: list, source: str, dest: str) -> list:
-    renamed = []
+def rename(block: List[Instr]|Instr, source: str, dest: str) -> List[Instr]:
+    renamed: List[Instr] = []
     for elem in block:
         if isinstance(elem, str) and elem == source:
             renamed.append(dest)
@@ -59,16 +45,19 @@ def rename(block: list, source: str, dest: str) -> list:
             renamed.append(elem)
     return renamed
 
-def liveness(blocks: list) -> tuple:
-    live = set()
-    livetimes = []
-    suffixes = {}
-    renumbered = []
-
-    from copy import copy
+def liveness(blocks: List[Instr], in_state: Set[str]=set()) -> Tuple[List[Set[str]], List[Instr]]:
+    """For a basic block, computes:
+       - The SSA form. This is the same as the input if it is already in SSA form.
+       - Live variables at each instruction, assuming `in_state` variables
+         are live in the next block (in execution order).
+    """
+    live: Set[str] = in_state
+    livetimes: List[Set[str]] = []
+    suffixes: Dict[str, int] = {}
+    renumbered: List[Instr] = []
 
     for block in reversed(blocks):
-        old_suffixes = copy(suffixes)
+        old_suffixes = suffixes.copy()
         alived = GEN(block)
         killed = KILL(block, suffixes)
         live = (live - killed) | alived
@@ -77,125 +66,56 @@ def liveness(blocks: list) -> tuple:
     
     return list(reversed(livetimes)), list(reversed(renumbered))
 
-def interference_graph(liveness: list) -> List[Node]:
-    nodes = {}
+def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
+    nodes: Dict[str, Set[str]] = {}
 
-    vars = set()
-    for life in liveness:
-        vars |= life
-    for var in vars:
+    # Initialize all nodes to no links
+    for var in reduce(lambda a, b: a | b, lifetimes):
         nodes[var] = set()
 
-    for alive_together in liveness:
+    # Compute links
+    for alive_together in lifetimes:
         for var in alive_together:
             nodes[var] |= alive_together - set([var])
     
     return nodes
 
-def coalesce(blocks: list, lifetimes: list, igraph: dict) -> list:
+def coalesce(blocks: List[Instr], blives: BLives, igraph: IGraph) -> Tuple[BLives, List[Instr]]:
     for i in range(len(blocks)):
-        a, b = WRITREGS(blocks[i]), READREGS(blocks[i])
-        if not a or not b: # Either no write or no read
+        instr = blocks[i]
+        written, read = vars_written_by(instr), vars_read_by(instr)
+        if not written or not read:
             continue
-        copy_related = blocks[i][0] == 'mov' and len(b) == 1
-        interfere = len(a) == 1 and a[0] in igraph[b[0]]
+        copy_related = is_copy_instruction(instr)
+        interfere = len(written) == 1 and written[0] in igraph[read[0]]
         if copy_related and not interfere: # Coalesce
-            blocks = rename(blocks, a[0], b[0])
-            lifetimes = [set(rename(life, a[0], b[0])) for life in lifetimes]
-    return lifetimes, blocks
+            blocks = rename(blocks, written[0], read[0])
+            blives = [set(rename(life, written[0], read[0])) for life in blives]
+    return blives, blocks
 
-def simplify(blocks: list, lifetimes: list) -> list:
+def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
     """Deletes:
-        - mov a, a
-        - movlike a, [deps]|nodeps // when a is dead everywhere
+        - 'movlike a, a'
+        - 'movlike a, <whatever>' when a is dead everywhere
     """
     simplified = []
     for block in blocks:
-        a, b = WRITREGS(block), READREGS(block)
+        a, b = vars_written_by(block), vars_read_by(block)
         if block[0] == 'mov' and a and b and len(b) == 1 and len(a) == 1 and a[0] == b[0]:
             continue
-        elif a and len(a) == 1 and not any(a[0] in life for life in lifetimes):
+        elif a and len(a) == 1 and not any(a[0] in life for life in blives):
             continue
         simplified.append(block)
     return simplified
 
-def allocate(blocks: list, variables: set, registers: list) -> list:
-    for var in variables:
-        reg = registers.pop(0)
-        blocks = rename(blocks, var, reg)
-    return blocks
-
-def _all_non_litteral(operands: list) -> list:
-    nonlit = []
-    for op in operands:
-        if isinstance(op, str) and op.startswith('REG'):
-            nonlit.append(op)
-        elif isinstance(op, list):
-            nonlit.extend(_all_non_litteral(op))
-    return nonlit
-
-def READREGS(instr) -> list:
-    """Returns registers read by @instr."""
-    if instr[0] in ['cmp', 'push', 'jmp'] or instr[0].startswith('b'):
-        return _all_non_litteral(instr[1:])
-    elif instr[0] == 'str':
-        return _all_non_litteral(instr[1:2])
-    return _all_non_litteral(instr[2:])
-
-def WRITREGS(instr) -> list:
-    """Returns registers written to by @instr."""
-    if instr[0] == 'cmp':
-        return []
-    elif instr[0] == 'pop':
-        return _all_non_litteral(instr[1:])
-    elif instr[0] == 'str':
-        return _all_non_litteral(instr[2:])
-    return _all_non_litteral(instr[1:2])
-
 asm = [
-    [
-        ['A', I.NODEPS],
-        ['D', I.NODEPS],
-        ['B', ['A']],
-        ['A', I.NODEPS],
-        ['C', ['B', 'D']],
-        [I.USE, ['B', 'C']],
-    ],
-    [
-        ['mov', 'REG4', '#100'],
-        ['mov', 'REG7', '#101'],
-        ['mov', 'REG5', 'REG4'],
-        ['mov', 'REG4', '#110'],
-        ['add', 'REG6', 'REG5', 'REG7'],
-        ['sub', 'r0', 'REG5', 'REG6'],
-    ]
+    ['mov', 'REG4', '#100'],
+    ['mov', 'REG7', '#101'],
+    ['mov', 'REG5', 'REG4'],
+    ['mov', 'REG4', '#110'],
+    ['add', 'REG6', 'REG5', 'REG7'],
+    ['sub', 'r0', 'REG5', 'REG6'],
 ]
 
 if __name__ == '__main__':
-    blocks = asm[1]
-    length = len(blocks)
-    new_length = length
-    run = False
-    while not run or new_length < length:
-        length = len(blocks)
-        lifetimes, blocksn = liveness(blocks)
-        print('initial blocks: ', blocks)
-        print('numbered blocks:', blocksn)
-        print('liveness per instruction:', lifetimes)
-
-        igraph = interference_graph(lifetimes)
-        lifetimes, coalesced = coalesce(blocksn, lifetimes, igraph)
-        simplified = simplify(coalesced, lifetimes)
-        print('igraph', igraph)
-        print('coalesced:', coalesced)
-        print('simplified:', simplified)
-
-        new_length = len(simplified)
-        blocks = simplified
-        run = True
-        print(f'iteration done: lengths {length} -> {new_length}')
-    vars = set()
-    for lives in lifetimes:
-        vars |= lives
-    allocated = allocate(blocks, vars, [f'r{i}' for i in range(4, 13)])
-    print('allocated:', allocated)
+    pass

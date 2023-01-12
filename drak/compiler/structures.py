@@ -21,31 +21,17 @@ class FnContext:
     def __init__(self, func: str) -> None:
         self.function = func
         self.unique_counter = 0
-        self.free_registers = list(range(4, 12))
-        self.reg_to_spill = 0
+        self.free_register = 4 # Assume an infinity of registers 4->\infty
         self.symbols = {} # identifier -> Symbol
         self.functions = {} # func_identifier -> [arg types]
         self.stack_used = 0
 
     def get_free_reg(self, asm: Asm) -> Reg:
-        if self.free_registers:
-            reg = self.free_registers.pop()
-            asm.append(f'// Acquiring r{reg} (free regs: {self.free_registers})')
-            return reg
-        # We need to spill a register
-        to_spill = 4 + (self.reg_to_spill % 8) # Cycles [r4-r11]
-        self.reg_to_spill += 1 # Update for next time
-        asm.append(f'push {{r{to_spill}}} // Spilling')
-        return to_spill
+        self.free_register += 1
+        return self.free_register - 1
 
     def release_reg(self, reg: Reg, asm: Asm):
-        if self.reg_to_spill > 0:
-            self.reg_to_spill -= 1
-            unspill_reg = 4 + (self.reg_to_spill % 8)
-            asm.append(f'pop {{r{unspill_reg}}} // Unspilling')
-            return
-        asm.append(f'// Releasing r{reg}')
-        self.free_registers.append(reg)
+        pass # TBD delete
 
     def reg_for_name(self, name: str) -> Reg:
         return self.symbols[name].register

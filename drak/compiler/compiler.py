@@ -36,7 +36,7 @@ def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
     if lhs_name not in ctx.get_symbols():
         print(f'Assigning to undeclared variable {lhs_name}')
 
-    asm += [f'// Reassigning {lhs_name}']
+    # asm += [f'// Reassigning {lhs_name}']
     lhs_type, reg = ctx.symbols[lhs_name]
 
     rhs = stmt.right()
@@ -44,16 +44,16 @@ def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
     if lhs.children: # LHS has array subscript(s)
         if len(lhs_type.dimensions) != len(lhs.children):
             print("Error, reassigning array, or not enough indices")
-        asm.append(f'mov r0, #4') # We'll use r0 for total index, r1 for partials
+        asm.append(['mov', 'r0', '#4']) # We'll use r0 for total index, r1 for partials
         for index_stmt in lhs.children:
             index_type = compile_expression(index_stmt, 1, ctx, asm)
-            asm.append(f'add r0, r1')
+            asm.append(['add', 'r0', 'r1'])
         tmp = ctx.get_free_reg(asm)
         rhs_type = compile_expression(rhs, tmp, ctx, asm)
-        asm.append(f'str r{tmp}, [r{reg}, r0, lsl #2]')
+        asm.append(['str', f'REG{tmp}', [f'REG{reg}', 'r0', 'lsl #2']])
         ctx.release_reg(tmp, asm)
     elif lhs_type == IntType and rhs.token_id() == TokenId.NUMBER:
-        asm += [f'mov r{reg}, #{rhs.token_value()}']
+        asm.append(['mov', f'REG{reg}', f'#{rhs.token_value()}'])
     else: # TODO some array assign here, for both LHS and RHS, move what's in decl
         rhs_type = compile_expression(rhs, reg, ctx, asm)
         if lhs_type != rhs_type:
@@ -77,16 +77,16 @@ def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
         array_size = vartype.dimensions[0] * 4 # TODO: type_of_expr function really needed
         # Allocate aligned stack, with room for array size, point it to next empty slot
         aligned = (array_size + (4 + 4) + 7) & ~7
-        asm.append(f'sub sp, #{aligned}')
-        asm.append(f'mov r{reg}, sp // Array decl: {varname}')
-        asm.append(f'add r{reg}, #4')
-        asm.append(f'mov r0, #{array_size}')
-        asm.append(f'str r0, [r{reg}, #0]')
+        asm.append(['sub', 'sp', f'#{aligned}'])
+        asm.append(['mov', f'REG{reg}', 'sp'])
+        asm.append(['add', f'REG{reg}', '#4'])
+        asm.append(['mov', 'r0', f'#{array_size}'])
+        asm.append(['str', 'r0', [f'REG{reg}', '#0']])
 
         tmp = ctx.get_free_reg(asm)
         for i, val in enumerate(rhs.children):
             _ = compile_expression(val, tmp, ctx, asm)
-            asm.append(f'str r{tmp}, [r{reg}, #{4*(i+1)}]')
+            asm.append(['str', f'REG{tmp}', [f'REG{reg}', f'#{4*(i+1)}']])
         ctx.release_reg(tmp, asm)
         ctx.stack_used += aligned
     elif vartype not in [IntType, BoolType]:
@@ -114,23 +114,23 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     ctx.functions[fn_name] = [ret_type] + [t[1] for t in typed_params]
     fnctx.functions = ctx.functions.copy()
 
-    asm = [f'{fn_name}:']
-    asm += ['push {r4-r12, lr}']
+    asm = [[f'{fn_name}:']]
+    asm.append(['push', ['r4-r12', 'lr']])
 
     for i, (arg, argtype) in enumerate(typed_params):
         if argtype not in [IntType, BoolType]:
             print(f'Error, cannot handle type {argtype} yet')
         reg = fnctx.get_free_reg(asm)
-        asm += [f'mov r{reg}, r{i} // Saving func param {arg}']
+        asm.append(['mov', f'REG{reg}', f'r{i}'])
         fnctx.symbols[arg] = Symbol(argtype, reg)
 
     for sub_stmt in body:
         asm += compile_statement(sub_stmt, fnctx)
 
-    asm += [f'.{fn_name}_end:',
-            f'add sp, #{fnctx.stack_used}',
-             'pop {r4-r12, lr}',
-             'bx lr']
+    asm += [[f'.{fn_name}_end:'],
+             ['add', 'sp', f'#{fnctx.stack_used}'],
+             ['pop', ['r4-r12', 'lr']],
+             ['bx', 'lr']]
 
     return asm
 
@@ -157,7 +157,7 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
     if type != BoolType:
         print(f'Error, non-bool type in conditional expression: {type}')
 
-    asm += [f'{jump_op} {label}']
+    asm.append([f'{jump_op}', f'{label}'])
 
     for i, sub_stmt in enumerate(stmt.children[1:]):
         if sub_stmt.token_id() == TokenId.ELSE:
@@ -165,7 +165,7 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
 
         asm += compile_statement(sub_stmt, ctx)
 
-    asm += [f'{label}:']
+    asm.append([f'{label}:'])
 
     for sub_stmt in stmt.children[1+i].children:
         asm += compile_statement(sub_stmt, ctx)
@@ -179,17 +179,17 @@ def compile_while(stmt: AstNode, ctx: FnContext) -> Asm:
     label_cond = f'.{ctx.function}_while_cond_{ctx.get_unique()}'
     asm = []
 
-    asm += [f'b {label_cond}']
-    asm += [f'{label}:']
+    asm.append(['b', f'{label_cond}'])
+    asm.append([f'{label}:'])
 
     for sub_stmt in stmt.children[1:]:
         asm += compile_statement(sub_stmt, ctx)
 
-    asm += [f'{label_cond}:']
+    asm.append([f'{label_cond}:'])
     scratch_reg = ctx.get_free_reg(asm)
     type = compile_expression(cond, scratch_reg, ctx, asm)
     ctx.release_reg(scratch_reg, asm)
-    asm += [f'{jump_op} {label}']
+    asm.append([f'{jump_op}', f'{label}'])
 
     if type != BoolType:
         print(f'Error, non-bool type in conditional expression: {type}')
@@ -214,8 +214,8 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
     elif stmt.token_id() == TokenId.RETURN:
         ret_reg = ctx.get_free_reg(asm)
         type = compile_expression(stmt.children[0], ret_reg, ctx, asm)
-        asm += [f'mov r0, r{ret_reg}']
-        asm += [f'b .{ctx.function}_end']
+        asm.append(['mov', 'r0', f'REG{ret_reg}'])
+        asm.append(['b', f'.{ctx.function}_end'])
         ctx.release_reg(ret_reg, asm)
 
         if type != ctx.functions[ctx.function][0]:
@@ -225,15 +225,17 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
 
 def compile(prog: List[AstNode]) -> Asm:
     ctx = FnContext('_start')
-    ctx.functions['print_char'] = [IdType('none'), IntType]
-    asm = asm_prolog
+    # ctx.functions['print_char'] = [IdType('none'), IntType]
+    # asm = asm_prolog
+    asm = []
 
     for stmt in prog:
-        asm += compile_statement(stmt, ctx)
+        asm += [compile_statement(stmt, ctx)]
 
     return asm
 
 def compile_to_asm(prog: List[AstNode], strip=False) -> str:
+    return '\n'.join(str(line) for line in compile(prog))
     return __raw_printer(compile(prog), strip_comments=strip)
 
 def __inline_asm_printer(asm) -> str:
