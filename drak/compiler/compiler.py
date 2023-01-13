@@ -147,16 +147,13 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
     label = f'.{ctx.function}_if_{ctx.get_unique()}'
     asm = []
 
-    # TODO: reimplement bool expr eval here:
-    # the version in compile_expression does more than cmp, which is all we
-    # need here
     scratch_reg = ctx.get_free_reg(asm)
-    type = compile_expression(cond, scratch_reg, ctx, asm)
+    lhs_type = compile_expression(cond.left(), scratch_reg, ctx, asm)
+    reg = ctx.get_free_reg(asm)
+    rhs_type = compile_expression(cond.right(), reg, ctx, asm)
+    asm.append([f'cmp', f'REG{scratch_reg}', f'REG{reg}'])
+    ctx.release_reg(reg, asm)
     ctx.release_reg(scratch_reg, asm)
-
-    if type != BoolType:
-        print(f'Error, non-bool type in conditional expression: {type}')
-
     asm.append([f'{jump_op}', f'{label}'])
 
     for i, sub_stmt in enumerate(stmt.children[1:]):
@@ -174,25 +171,27 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
 
 def compile_while(stmt: AstNode, ctx: FnContext) -> Asm:
     cond = stmt.children[0]
-    jump_op = jump_op_map[cond.token_id()]
-    label = f'.{ctx.function}_while_begin_{ctx.get_unique()}'
-    label_cond = f'.{ctx.function}_while_cond_{ctx.get_unique()}'
+    jump_op = jump_op_map_inversed[cond.token_id()]
+    unique = ctx.get_unique()
+    label = f'.{ctx.function}_while_begin_{unique}'
+    label_end = f'.{ctx.function}_while_post_{unique}'
     asm = []
 
-    asm.append(['b', f'{label_cond}'])
     asm.append([f'{label}:'])
+    scratch_reg = ctx.get_free_reg(asm)
+    lhs_type = compile_expression(cond.left(), scratch_reg, ctx, asm)
+    reg = ctx.get_free_reg(asm)
+    rhs_type = compile_expression(cond.right(), reg, ctx, asm)
+    asm.append([f'cmp', f'REG{scratch_reg}', f'REG{reg}'])
+    ctx.release_reg(reg, asm)
+    ctx.release_reg(scratch_reg, asm)
+    asm.append([f'{jump_op}', f'{label_end}'])
 
     for sub_stmt in stmt.children[1:]:
         asm += compile_statement(sub_stmt, ctx)
 
-    asm.append([f'{label_cond}:'])
-    scratch_reg = ctx.get_free_reg(asm)
-    type = compile_expression(cond, scratch_reg, ctx, asm)
-    ctx.release_reg(scratch_reg, asm)
-    asm.append([f'{jump_op}', f'{label}'])
-
-    if type != BoolType:
-        print(f'Error, non-bool type in conditional expression: {type}')
+    asm.append(['b', f'{label}'])
+    asm.append([f'{label_end}:'])
 
     return asm
 
