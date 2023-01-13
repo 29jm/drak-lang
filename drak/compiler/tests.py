@@ -214,33 +214,63 @@ class TestIRBlocks(unittest.TestCase):
         ['pop', ['r4-r12', 'lr']],
         ['bx', 'lr']]
 
+    fnblocks2 = [
+        ['main:'],
+        ['push', ['r4-r12', 'lr']],
+        ['mov', 'REG4', '#0'],
+        ['mov', 'REG5', '#0'],
+        ['.main_while_begin_1:'],
+        ['mov', 'REG6', 'REG5'],
+        ['mov', 'REG7', '#1000'],
+        ['cmp', 'REG6', 'REG7'],
+        ['bge', '.main_while_post_1'],
+        ['mov', 'REG8', 'REG5'],
+        ['mov', 'REG9', '#2'],
+        ['mul', 'REG8', 'REG9'],
+        ['mov', 'REG10', '#500'],
+        ['cmp', 'REG8', 'REG10'],
+        ['bge', '.main_if_2'],
+        ['mov', 'REG11', 'REG5'],
+        ['add', 'REG4', 'REG11'],
+        ['.main_if_2:'],
+        ['add', 'REG5', '#1'],
+        ['b', '.main_while_begin_1'],
+        ['.main_while_post_1:'],
+        ['mov', 'REG12', '#0'],
+        ['mov', 'r0', 'REG12'],
+        ['b', '.main_end'],
+        ['.main_end:'],
+        ['add', 'sp', '#0'],
+        ['pop', ['r4-r12', 'lr']],
+        ['bx', 'lr']]
+
     def test_basic_block_1(self):
         bblocks = basic_blocks(self.fnblocks)
         self.assertEqual(bblocks, [
             [ ['main:'], #0
-                ['push', ['r4-r12', 'lr']],
-                ['mov', 'REG4', '#76'],
-                ['mov', 'REG5', 'REG4'],
-                ['mov', 'REG6', '#3'],
-                ['cmp', 'REG5', 'REG6'],
-                ['mov', 'REG5', '#1'],
-                ['beq', '.main_cond_2'] ],
+              ['push', ['r4-r12', 'lr']],
+              ['mov', 'REG4', '#76'],
+              ['mov', 'REG5', 'REG4'],
+              ['mov', 'REG6', '#3'],
+              ['cmp', 'REG5', 'REG6'],
+              ['mov', 'REG5', '#1'],
+              ['beq', '.main_cond_2'] ],
             [ ['mov', 'REG5', '#0'] ], # 1
             [ ['.main_cond_2:'], # 2
-                ['bne', '.main_if_1'] ],
+              ['bne', '.main_if_1'] ],
             [ ['mov', 'REG7', '#45'], # 3
-                ['mov', 'r0', 'REG7'],
-                ['b', '.main_end'] ],
+              ['mov', 'r0', 'REG7'],
+              ['b', '.main_end'] ],
             [ ['.main_if_1:'], # 4
-                ['mov', 'REG8', '#2'],
-                ['mov', 'REG9', 'REG4'],
-                ['mul', 'REG8', 'REG9'],
-                ['mov', 'r0', 'REG8'],
-                ['b', '.main_end'] ],
+              ['mov', 'REG8', '#2'],
+              ['mov', 'REG9', 'REG4'],
+              ['mul', 'REG8', 'REG9'],
+              ['mov', 'r0', 'REG8'],
+              ['b', '.main_end'] ],
             [ ['.main_end:'], # 5
-                ['add', 'sp', '#0'],
-                ['pop', ['r4-r12', 'lr']],
-                ['bx', 'lr']]])
+              ['add', 'sp', '#0'],
+              ['pop', ['r4-r12', 'lr']],
+              ['bx', 'lr']]])
 
     def test_control_flow_graph_1(self):
         bblocks = basic_blocks(self.fnblocks)
@@ -253,6 +283,62 @@ class TestIRBlocks(unittest.TestCase):
             4: set([5]),
             5: set([-1])
         })
+
+    def test_dominator_sets(self):
+        bblocks = basic_blocks(self.fnblocks)
+        cfg = control_flow_graph(bblocks)
+        dom_sets = dominator_sets(cfg)
+        self.assertEqual(dom_sets, {
+            0: set([0]),
+            1: set([0, 1]),
+            2: set([0, 2]),
+            3: set([0, 2, 3]),
+            4: set([0, 2, 4]),
+            5: set([0, 2, 5]),
+        })
+
+    def test_immediate_dominators(self):
+        bblocks = basic_blocks(self.fnblocks)
+        cfg = control_flow_graph(bblocks)
+        idoms = immediate_dominators(cfg)
+        self.assertEqual(idoms, {
+            1: 0,
+            2: 0,
+            3: 2,
+            4: 2,
+            5: 2
+        })
+
+    def test_dominance_frontier(self):
+        cfg = {
+            0: set([1]),
+            1: set([-1, 2]),
+            2: set([3, 4]),
+            3: set([4]),
+            4: set([1]) }
+        df = dominance_frontier(cfg)
+        self.assertEqual(df, {
+            0: set(),
+            1: set([1]),
+            2: set([1]),
+            3: set([4]),
+            4: set([1]),
+        })
+
+    def test_dominance_frontier(self):
+        cfg = {
+            0: set([1]),
+            1: set([-1, 2]),
+            2: set([3, 4]),
+            3: set([4]),
+            4: set([1]) }
+        df = dominance_frontier(cfg)
+
+    def test_phi_insertion(self):
+        bblocks = basic_blocks(self.fnblocks2)
+        cfg = control_flow_graph(bblocks)
+        df = dominance_frontier(cfg)
+        phi_inserted = phi_insertion(bblocks, df)
 
 if __name__ == '__main__':
     unittest.main()

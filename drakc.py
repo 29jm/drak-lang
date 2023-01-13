@@ -5,6 +5,7 @@ from pathlib import Path
 import drak.parser.parser as parser
 import drak.compiler.compiler as compiler
 import drak.compiler.liveness as liveness
+import drak.compiler.ir_utils as ir_utils
 import subprocess
 
 def compile(source: Path, dest: Path, args):
@@ -14,13 +15,20 @@ def compile(source: Path, dest: Path, args):
         dst.write(output)
 
         opt = compiler.compile(toks)
-        print('\n'.join(('\n\t'.join(str(line) for line in block)) for block in opt))
+        if args.emit_only:
+            print('\n'.join(('\n\t'.join(str(line) for line in block)) for block in opt))
+        if args.cfg:
+            bblocks = ir_utils.basic_blocks(opt[0])
+            cfg = ir_utils.control_flow_graph(bblocks)
+            dot = ir_utils.print_cfg_as_dot(cfg, bblocks)
+            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot, stdout=subprocess.PIPE)
+            subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
 
     name_asm = (dest.parent / dest.stem).with_suffix('.asm')
     name_o = (dest.parent / dest.stem).with_suffix('.o')
     name_prog = dest.parent / dest.stem
 
-    if args.emit_only:
+    if args.emit_only or args.cfg:
         return
 
     subprocess.run([
@@ -48,6 +56,7 @@ def main():
     parser.add_argument('-s', '--strip-comments',
                         dest='strip_comments', action='store_true', default=False)
     parser.add_argument('-E', '--emit-only', dest='emit_only', action='store_true', default=False)
+    parser.add_argument('-C', '--cfg', dest='cfg', action='store_true', default=False)
     args = parser.parse_args()
 
     if not args.output:
