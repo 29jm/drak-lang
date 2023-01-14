@@ -1,5 +1,6 @@
 import unittest
 from drak.compiler.ir_utils import *
+from drak.compiler.liveness import *
 
 class TestIRReadWrite(unittest.TestCase):
     def test_push_written(self):
@@ -339,6 +340,22 @@ class TestIRBlocks(unittest.TestCase):
         cfg = control_flow_graph(bblocks)
         df = dominance_frontier(cfg)
         phi_inserted = phi_insertion(bblocks, df)
+        self.assertTrue(True)
+
+    def test_block_liveness(self):
+        bblocks = basic_blocks(self.fnblocks2)
+        cfg = control_flow_graph(bblocks)
+        lives = block_liveness(bblocks, cfg)
+        self.assertEqual(lives, {
+            -1: set(),
+            0: set(),
+            1: set(['REG4', 'REG5']),
+            2: set(['REG4', 'REG5']),
+            3: set(['REG4', 'REG5']),
+            4: set(['REG4', 'REG5']),
+            5: set([]),
+            6: set([]),
+        })
 
 if __name__ == '__main__':
     unittest.main()

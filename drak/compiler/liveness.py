@@ -8,11 +8,8 @@ from drak.compiler.ir_utils import *
 def GEN(instr: Instr) -> Set[str]:
     return set(vars_read_by(instr))
 
-def KILL(instr: Instr, suffixes: Dict[str, int]) -> Set[str]:
-    written = vars_written_by(instr)
-    for writ in written:
-        suffixes[writ] = suffixes.get(writ, 0) + 1
-    return set(written)
+def KILL(instr: Instr) -> Set[str]:
+    return set(vars_written_by(instr))
 
 def apply_suffixes(variables: LiveSet, suffixes: Dict[str, int]) -> list:
     suffixed: Set[str] = set()
@@ -45,26 +42,50 @@ def rename(block: List[Instr]|Instr, source: str, dest: str) -> List[Instr]:
             renamed.append(elem)
     return renamed
 
-def liveness(blocks: List[Instr], in_state: Set[str]=set()) -> Tuple[List[Set[str]], List[Instr]]:
-    """For a basic block, computes:
-       - The SSA form. This is the same as the input if it is already in SSA form.
-       - Live variables at each instruction, assuming `in_state` variables
-         are live in the next block (in execution order).
+def liveness(blocks: List[Instr], out_live: Set[str]=set()) -> List[Set[str]]:
+    """For a basic block in SSA form, computes live variables at each instruction,
+       assuming `out_live` variables are known to be alive in the next block
+       in execution order.
+       Essentially propagates lifetime information backwards in the CFG.
     """
-    live: Set[str] = in_state
+    live: Set[str] = out_live
     livetimes: List[Set[str]] = []
-    suffixes: Dict[str, int] = {}
-    renumbered: List[Instr] = []
 
     for block in reversed(blocks):
-        old_suffixes = suffixes.copy()
         alived = GEN(block)
-        killed = KILL(block, suffixes)
+        killed = KILL(block)
         live = (live - killed) | alived
-        livetimes.append(apply_suffixes(live, old_suffixes))
-        renumbered.append(renumber(block, old_suffixes))
+        livetimes.append(live)
     
-    return list(reversed(livetimes)), list(reversed(renumbered))
+    return list(reversed(livetimes))
+
+def block_liveness(bblocks: List[List[Instr]], cfg: BGraph) -> Dict[int, Set[str]]:
+    """Computes a Block -> {alive at block entrance} map."""
+    def comp(block, comp_lifetimes: Dict[int, Set[str]], edges_visited: set) -> Dict[int, Set[str]]:
+        for pred in predecessors(cfg, block):
+            if (block, pred) in edges_visited:
+                continue
+            edges_visited.add((block, pred))
+            alive_in_prev = liveness(bblocks[pred], comp_lifetimes[block])[0]
+            if alive_in_prev != comp_lifetimes[pred]:
+                # added = alive_in_prev - comp_lifetimes[pred]
+                comp_lifetimes[pred] |= alive_in_prev
+                # Mark ancestors of `pred` as "to-revisit", in case new lives propagate there
+                arcs = [(pred, pp) for pp in predecessors(cfg, pred)
+                    if (pred, pp) in edges_visited]
+                edges_visited.difference_update(arcs)
+                # for arc in arcs:
+                #     if any(var not in comp_lifetimes[arc[1]] for var in added):
+                #         edges_visited.remove(arc)
+            new_life = comp(pred, comp_lifetimes, edges_visited)
+            for b, lives in new_life.items():
+                comp_lifetimes[b] |= lives
+        return comp_lifetimes
+
+    life = {n: set() for n in cfg.keys()} | {-1: set()}
+    edges_visited: Set[Tuple[int, int]] = set()
+
+    return comp(-1, life, edges_visited)
 
 def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
     nodes: Dict[str, Set[str]] = {}
@@ -107,15 +128,6 @@ def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
             continue
         simplified.append(block)
     return simplified
-
-asm = [
-    ['mov', 'REG4', '#100'],
-    ['mov', 'REG7', '#101'],
-    ['mov', 'REG5', 'REG4'],
-    ['mov', 'REG4', '#110'],
-    ['add', 'REG6', 'REG5', 'REG7'],
-    ['sub', 'r0', 'REG5', 'REG6'],
-]
 
 if __name__ == '__main__':
     pass

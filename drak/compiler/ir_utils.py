@@ -15,6 +15,9 @@ Instr = List[str]
 LiveSet = Set[str]
 IGraph = Dict[str, LiveSet]
 
+# Graphs of basic blocks: Control flow, dominator, etc...
+BGraph = Dict[int, Set[int]]
+
 # Live variables at each step in a basic block.
 BLives = List[LiveSet]
 
@@ -107,7 +110,7 @@ def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
 
     return blocks
 
-def control_flow_graph(bblocks: List[List[Instr]]) -> Dict[int, Set[int]]:
+def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
     """Computes the control flow graph of `bblocks`, represented by a dictionary
     from block index to successor block indices.
     The first block in the graph has index zero. Successor indices of -1 represent
@@ -118,23 +121,26 @@ def control_flow_graph(bblocks: List[List[Instr]]) -> Dict[int, Set[int]]:
         graph[i] = set(successors)
     return graph
 
-def print_cfg_as_dot(cfg: Dict[int, Set[int]], bblocks) -> str:
+def print_cfg_as_dot(cfg: BGraph, bblocks) -> str:
     def print_block(bblock) -> str:
         return "\\l".join(" ".join(str(op) for op in instr) for instr in bblock) + "\\l"
     dot = "digraph G {\n"
+    from drak.compiler.liveness import block_liveness
+    live_vars = block_liveness(bblocks, cfg)
     for b, succ in cfg.items():
-        dot += f'\t{b} [label="{print_block(bblocks[b])}",xlabel={b},shape=box]\n'
+        live = ', '.join(v for v in sorted(live_vars[b]))
+        dot += f'\t{b} [label="{print_block(bblocks[b])}",xlabel="{b}: {live}",shape=box]\n'
         dot += f"\t{b} -> {', '.join(str(s) for s in succ)}\n"
     return dot + "}\n"
 
-def predecessors(cfg: Dict[int, Set[int]], block: int) -> Set[int]:
+def predecessors(cfg: BGraph, block: int) -> Set[int]:
     preds = set()
     for maybe_pred, successors in cfg.items():
         if block in successors:
             preds.add(maybe_pred)
     return preds
 
-def dominator_sets(cfg: Dict[int, Set[int]]) -> Dict[int, Set[int]]:
+def dominator_sets(cfg: BGraph) -> BGraph:
     N = set(cfg.keys())
     root = set([0])
     doms = {0: root} # CFG root dominates itself
@@ -153,7 +159,7 @@ def dominator_sets(cfg: Dict[int, Set[int]]) -> Dict[int, Set[int]]:
                 updated = True
     return doms
 
-def immediate_dominators(cfg: Dict[int, Set[int]]) -> Dict[int, int]:
+def immediate_dominators(cfg: BGraph) -> Dict[int, int]:
     idoms = {n: s - set([n]) for n, s in dominator_sets(cfg).items()}
     non_roots = set(cfg.keys()) - set([0])
     for n in non_roots:
@@ -164,7 +170,7 @@ def immediate_dominators(cfg: Dict[int, Set[int]]) -> Dict[int, int]:
         idoms[n].difference_update(to_delete)
     return {n: idoms[n].pop() for n in non_roots}
 
-def dominance_frontier(cfg: Dict[int, Set[int]]) -> Dict[int, Set[int]]:
+def dominance_frontier(cfg: BGraph) -> BGraph:
     idoms = immediate_dominators(cfg)
     df: Dict[int, Set[int]] = {n: set() for n in cfg.keys()}
     for n in cfg.keys():
@@ -184,13 +190,13 @@ def definitions_in_block(bblock: List[Instr]) -> Set[str]:
             defs.add(var)
     return defs
 
-def phi_insertion(bblocks: List[List[Instr]], df: Dict[int, Set[int]]) -> List[List[Instr]]:
-    Aorig: Dict[int, Set[str]] = {}
-    Aphi: Dict[int, Set[var]] = {n: set() for n in range(len(bblocks))}
+def phi_insertion(bblocks: List[List[Instr]], df: BGraph) -> List[List[Instr]]:
+    var_map: Dict[int, Set[str]] = {}
+    phi_map: Dict[int, Set[var]] = {n: set() for n in range(len(bblocks))}
     defsites: Dict[str, Set[int]] = {}
     for n in range(len(bblocks)):
-        Aorig[n] = definitions_in_block(bblocks[n])
-        for var in Aorig[n]:
+        var_map[n] = definitions_in_block(bblocks[n])
+        for var in var_map[n]:
             if not var in defsites:
                 defsites[var] = set([n])
             else:
@@ -200,9 +206,9 @@ def phi_insertion(bblocks: List[List[Instr]], df: Dict[int, Set[int]]) -> List[L
         while W:
             n = W.pop()
             for block_y in df[n]:
-                if var not in Aphi[block_y]:
-                    bblocks[block_y].insert(0, ['mov', var, f'PHI TBD'])
-                    Aphi[block_y].add(var)
-                    if var in Aorig[block_y]:
+                if var not in phi_map[block_y]:
+                    bblocks[block_y].insert(0, ['PHI', var, [var, '...']])
+                    phi_map[block_y].add(var)
+                    if var in var_map[block_y]:
                         W.add(block_y)
     return bblocks
