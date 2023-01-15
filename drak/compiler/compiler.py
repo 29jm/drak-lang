@@ -145,6 +145,7 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
     cond = stmt.children[0]
     jump_op = jump_op_map_inversed[cond.token_id()]
     label = f'.{ctx.function}_if_{ctx.get_unique()}'
+    label_end = f'.{ctx.function}_if_post_{ctx.get_unique()}'
     asm = []
 
     scratch_reg = ctx.get_free_reg(asm)
@@ -162,10 +163,15 @@ def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
 
         asm += compile_statement(sub_stmt, ctx)
 
+    if stmt.children[1+i].token_id() == TokenId.ELSE:
+        asm.append(['b', label_end])
     asm.append([f'{label}:'])
 
     for sub_stmt in stmt.children[1+i].children:
         asm += compile_statement(sub_stmt, ctx)
+
+    if stmt.children[1+i].token_id() == TokenId.ELSE:
+        asm.append([f'{label_end}:'])
 
     return asm
 
