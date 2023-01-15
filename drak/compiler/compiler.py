@@ -47,7 +47,7 @@ def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
         asm.append(['mov', 'r0', '#4']) # We'll use r0 for total index, r1 for partials
         for index_stmt in lhs.children:
             index_type = compile_expression(index_stmt, 1, ctx, asm)
-            asm.append(['add', 'r0', 'r1'])
+            asm.append(['add', 'r0', 'r0', 'r1'])
         tmp = ctx.get_free_reg(asm)
         rhs_type = compile_expression(rhs, tmp, ctx, asm)
         asm.append(['str', f'REG{tmp}', [f'REG{reg}', 'r0', 'lsl #2']])
@@ -77,9 +77,9 @@ def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
         array_size = vartype.dimensions[0] * 4 # TODO: type_of_expr function really needed
         # Allocate aligned stack, with room for array size, point it to next empty slot
         aligned = (array_size + (4 + 4) + 7) & ~7
-        asm.append(['sub', 'sp', f'#{aligned}'])
+        asm.append(['sub', 'sp', 'sp', f'#{aligned}'])
         asm.append(['mov', f'REG{reg}', 'sp'])
-        asm.append(['add', f'REG{reg}', '#4'])
+        asm.append(['add', f'REG{reg}', f'REG{reg}', '#4'])
         asm.append(['mov', 'r0', f'#{array_size}'])
         asm.append(['str', 'r0', [f'REG{reg}', '#0']])
 
@@ -128,7 +128,7 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
         asm += compile_statement(sub_stmt, fnctx)
 
     asm += [[f'.{fn_name}_end:'],
-             ['add', 'sp', f'#{fnctx.stack_used}'],
+             ['add', 'sp', 'sp', f'#{fnctx.stack_used}'],
              ['pop', ['r4-r12', 'lr']],
              ['bx', 'lr']]
 

@@ -20,10 +20,10 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
                 dimensions = vartype.dimensions[:] # Copy dimensions to avoid modifying type
                 offset_current = ctx.get_free_reg(asm)
                 asm.append(['mov', f'REG{target_reg}', f'REG{src_reg}'])
-                asm.append(['add', f'REG{target_reg}', '#4']) # Array size is first uint32; skip it
+                asm.append(['add', f'REG{target_reg}', f'REG{target_reg}', '#4']) # Array size is first uint32; skip it
                 for index_stmt in stmt.children:
                     _ = compile_expression(index_stmt, offset_current, ctx, asm) # check int TODO
-                    asm.append(['add', f'REG{target_reg}', f'REG{offset_current}', 'lsl #2']) # TODO size to move offset
+                    asm.append(['add', f'REG{target_reg}', f'REG{target_reg}', f'REG{offset_current}', 'lsl #2']) # TODO size to move offset
                     dimensions.pop(0)
                 asm.append(['ldr', f'REG{target_reg}', [f'REG{target_reg}', '#0']])
                 ctx.release_reg(offset_current, asm)
@@ -58,11 +58,11 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
         print('Arihthmetic on non-integers not yet supported')
 
     if allows_immediates and stmt.right().token_id() == TokenId.NUMBER:
-        asm.append([f'{op}', f'REG{target_reg}', f'#{stmt.right().token_value()}'])
+        asm.append([f'{op}', f'REG{target_reg}', f'REG{target_reg}', f'#{stmt.right().token_value()}'])
     else:
         reg = ctx.get_free_reg(asm)
         rhs_type = compile_expression(stmt.right(), reg, ctx, asm)
-        asm.append([f'{op}', f'REG{target_reg}', f'REG{reg}'])
+        asm.append([f'{op}', f'REG{target_reg}', f'REG{target_reg}', f'REG{reg}'])
         ctx.release_reg(reg, asm)
 
     return lhs_type
