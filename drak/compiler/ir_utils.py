@@ -208,8 +208,11 @@ def definitions_in_block(bblock: List[Instr]) -> Set[str]:
     return defs
 
 def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes: Dict[int, Set[str]]) -> List[List[Instr]]:
+    # Describes variable assignments, per block
     var_map: Dict[int, Set[str]] = {}
+    # Describes existing phi funcs, per block
     phi_map: Dict[int, Set[var]] = {n: set() for n in range(len(bblocks))}
+    # Describes blocks where each variable is assigned to
     defsites: Dict[str, Set[int]] = {}
     for n in range(len(bblocks)):
         var_map[n] = definitions_in_block(bblocks[n])
@@ -220,16 +223,19 @@ def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes
                 defsites[var].add(n)
     globs = reduce(lambda x, y: x | y, lifetimes.values(), set())
     for var in set(defsites.keys()) & globs:
-        W = copy.deepcopy(defsites[var])
+        W = defsites[var]
         while W:
             n = W.pop()
             for block_y in df[n]:
+                # We don't have a phi function for var in block_y yet, place it
                 if var not in phi_map[block_y]:
                     insert_at = 0 if ':' in bblocks[block_y][0] else 1
                     phi_args = [var] * len(predecessors(cfg, block_y))
                     bblocks[block_y].insert(insert_at, ['PHI', var, phi_args])
                     phi_map[block_y].add(var)
-                    W.add(block_y)
+                    # We've just added an assignment to `var`: iterate
+                    if var not in var_map[block_y]:
+                        W.add(block_y)
     return bblocks
 
 def renumber_instr_ops(instr: Instr, ops: List[int], src: str, dst: str) -> Instr:
@@ -287,5 +293,5 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
     for var in varlist:
         counts[var] = 0
         stacks[var] = []
-    
+
     return rename(0)
