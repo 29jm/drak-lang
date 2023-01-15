@@ -87,6 +87,26 @@ def block_liveness(bblocks: List[List[Instr]], cfg: BGraph) -> Dict[int, Set[str
 
     return comp(-1, life, edges_visited)
 
+def block_liveness2(bblocks: List[List[Instr]], cfg: BGraph) -> Set[int, Set[str]]:
+    worklist = set(cfg.keys())
+    in_states = {n: set() for n in cfg.keys()} | {-1: set()}
+
+    while worklist:
+        block = worklist.pop()
+
+        # Compute live vars at block exit: in_states of successors
+        out_state = set()
+        for succ in cfg[block]:
+            out_state |= in_states[succ]
+
+        # Compute any vars that came alive, any var killed
+        alive = liveness(bblocks[block], out_state)[0]
+        if alive != in_states[block]:
+            in_states[block] = alive
+            worklist.update(predecessors(cfg, block))
+
+    return in_states
+
 def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
     nodes: Dict[str, Set[str]] = {}
 

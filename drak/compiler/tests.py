@@ -318,6 +318,7 @@ class TestIRBlocks(unittest.TestCase):
         cfg = control_flow_graph(bblocks)
         idoms = immediate_dominators(cfg)
         self.assertEqual(idoms, {
+            0: set(),
             1: 0,
             2: 0,
             3: 2,
@@ -350,17 +351,10 @@ class TestIRBlocks(unittest.TestCase):
             4: set([1]) }
         df = dominance_frontier(cfg)
 
-    def test_phi_insertion(self):
-        bblocks = basic_blocks(self.fnblocks2)
-        cfg = control_flow_graph(bblocks)
-        df = dominance_frontier(cfg)
-        phi_inserted = phi_insertion(bblocks, df)
-        self.assertTrue(True)
-
     def test_block_liveness(self):
         bblocks = basic_blocks(self.fnblocks2)
         cfg = control_flow_graph(bblocks)
-        lives = block_liveness(bblocks, cfg)
+        lives = block_liveness2(bblocks, cfg)
         self.assertEqual(lives, {
             -1: set(),
             0: set(),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Dict, Set
+from functools import reduce
 import itertools
 import copy
 import re
@@ -30,28 +31,38 @@ def vars_in(operands: List[str]) -> list:
             nonlit.extend(vars_in(op))
     return nonlit
 
-def vars_read_by(instr: Instr) -> List[str]:
-    """Returns registers read by @instr."""
+def ops_read_by(instr: Instr) -> List[int]:
+    """Returns the indices in @instr containing operands being read."""
+    indices = list(range(len(instr)))
     if instr[0] in ['cmp', 'push', 'jmp'] or instr[0].startswith('b'):
-        return vars_in(instr[1:])
+        return indices[1:]
     elif instr[0] in ['add', 'sub', 'mul', 'div', 'sdiv']:
         if len(instr[1:]) == 2:
-            return vars_in(instr[1:])
+            return indices[1:]
         elif len(instr[1:]) == 3:
-            return vars_in(instr[2:])
+            return indices[2:]
     elif instr[0] == 'str':
-        return vars_in(instr[1:2])
-    return vars_in(instr[2:])
+        return [1]
+    return indices[2:]
 
-def vars_written_by(instr: Instr) -> List[str]:
-    """Returns registers written to by @instr."""
+def ops_written_by(instr: Instr) -> List[int]:
+    """Returns the indices in @instr containing operands being written."""
+    indices = list(range(len(instr)))
     if instr[0] in ['cmp', 'push']:
         return []
     elif instr[0] == 'pop':
-        return vars_in(instr[1:])
+        return indices[1:]
     elif instr[0] == 'str':
-        return vars_in(instr[2:])
-    return vars_in(instr[1:2])
+        return indices[2:]
+    return indices[1:2]
+
+def vars_read_by(instr: Instr) -> List[str]:
+    """Returns registers read by @instr."""
+    return vars_in(instr[op] for op in ops_read_by(instr))
+
+def vars_written_by(instr: Instr) -> List[str]:
+    """Returns registers written to by @instr."""
+    return vars_in(instr[op] for op in ops_written_by(instr))
 
 def is_copy_instruction(instr: Instr) -> bool:
     inputs = len(vars_read_by(instr))
@@ -121,12 +132,10 @@ def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
         graph[i] = set(successors)
     return graph
 
-def print_cfg_as_dot(cfg: BGraph, bblocks) -> str:
+def print_cfg_as_dot(cfg: BGraph, bblocks, live_vars) -> str:
     def print_block(bblock) -> str:
         return "\\l".join(" ".join(str(op) for op in instr) for instr in bblock) + "\\l"
     dot = "digraph G {\n"
-    from drak.compiler.liveness import block_liveness
-    live_vars = block_liveness(bblocks, cfg)
     for b, succ in cfg.items():
         live = ', '.join(v for v in sorted(live_vars[b]))
         dot += f'\t{b} [label="{print_block(bblocks[b])}",xlabel="{b}: {live}",shape=box]\n'
@@ -168,7 +177,15 @@ def immediate_dominators(cfg: BGraph) -> Dict[int, int]:
             if t in idoms[s]:
                 to_delete.add(t)
         idoms[n].difference_update(to_delete)
-    return {n: idoms[n].pop() for n in non_roots}
+    return {n: idoms[n].pop() for n in non_roots} | {0: set()}
+
+def dominator_tree(idoms: Dict[int, int]) -> BGraph:
+    domtree: BGraph = {n: set() for n in idoms.keys()}
+    for block in idoms.keys():
+        for other in idoms.keys():
+            if idoms[other] == block:
+                domtree[block].add(other)
+    return domtree
 
 def dominance_frontier(cfg: BGraph) -> BGraph:
     idoms = immediate_dominators(cfg)
@@ -190,7 +207,7 @@ def definitions_in_block(bblock: List[Instr]) -> Set[str]:
             defs.add(var)
     return defs
 
-def phi_insertion(bblocks: List[List[Instr]], df: BGraph) -> List[List[Instr]]:
+def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes: Dict[int, Set[str]]) -> List[List[Instr]]:
     var_map: Dict[int, Set[str]] = {}
     phi_map: Dict[int, Set[var]] = {n: set() for n in range(len(bblocks))}
     defsites: Dict[str, Set[int]] = {}
@@ -201,14 +218,17 @@ def phi_insertion(bblocks: List[List[Instr]], df: BGraph) -> List[List[Instr]]:
                 defsites[var] = set([n])
             else:
                 defsites[var].add(n)
-    for var in defsites.keys():
+    globs = reduce(lambda x, y: x | y, lifetimes.values(), set())
+    for var in set(defsites.keys()) & globs:
         W = copy.deepcopy(defsites[var])
         while W:
             n = W.pop()
             for block_y in df[n]:
                 if var not in phi_map[block_y]:
-                    bblocks[block_y].insert(0, ['PHI', var, [var, '...']])
+                    insert_at = 0 if ':' in bblocks[block_y][0] else 1
+                    phi_args = [var] * len(predecessors(cfg, block_y))
+                    bblocks[block_y].insert(insert_at, ['PHI', var, phi_args])
                     phi_map[block_y].add(var)
-                    if var in var_map[block_y]:
-                        W.add(block_y)
+                    W.add(block_y)
     return bblocks
+
