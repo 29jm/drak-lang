@@ -232,3 +232,60 @@ def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes
                     W.add(block_y)
     return bblocks
 
+def renumber_instr_ops(instr: Instr, ops: List[int], src: str, dst: str) -> Instr:
+    for idx in ops:
+        if isinstance(instr[idx], list):
+            for i, op in enumerate(instr[idx]):
+                if op == src:
+                    instr[idx][i] = dst
+        if instr[idx] == src:
+            instr[idx] = dst
+    return instr
+
+def renumber_written(instr: Instr, src: str, dst: str) -> Instr:
+    return renumber_instr_ops(instr, ops_written_by(instr), src, dst)
+
+def renumber_read(instr: Instr, src: str, dst: str) -> Instr:
+    return renumber_instr_ops(instr, ops_read_by(instr), src, dst)
+
+def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Instr]]:
+    def noprefix(var: str) -> str:
+        return var.split('.')[0]
+
+    def rename(block):
+        for i, instr in enumerate(bblocks[block]):
+            if not 'PHI' in instr[0]:
+                for var in vars_read_by(instr):
+                    varidx = stacks[var][-1]
+                    bblocks[block][i] = renumber_read(instr, var, f'{var}.{varidx}')
+            for var in vars_written_by(instr):
+                counts[var] += 1
+                varidx = counts[var]
+                stacks[var].append(varidx)
+                renumber_written(bblocks[block][i], var, f'{var}.{varidx}')
+        for i, succ in enumerate(cfg[block]):
+            for j, instr in enumerate(bblocks[succ]):
+                if not 'PHI' in instr[0]:
+                    continue
+                pred_no = sorted(predecessors(cfg, succ)).index(block)
+                phi_arg = instr[1]
+                idx = stacks[noprefix(phi_arg)][-1]
+                bblocks[succ][j][2][pred_no] = f'{noprefix(phi_arg)}.{idx}'
+        for child in domtree[block]:
+            rename(child)
+        for instr in bblocks[block]:
+            for var in vars_written_by(instr):
+                stacks[noprefix(var)].pop()
+        return bblocks
+
+    domtree = dominator_tree(immediate_dominators(cfg))
+    varlist = set()
+    counts: Dict[str, int] = {}
+    stacks: Dict[str, List[int]] = {}
+    for n in cfg.keys():
+        varlist |= definitions_in_block(bblocks[n])
+    for var in varlist:
+        counts[var] = 0
+        stacks[var] = []
+    
+    return rename(0)

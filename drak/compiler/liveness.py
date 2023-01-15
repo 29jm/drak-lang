@@ -20,13 +20,16 @@ def apply_suffixes(variables: LiveSet, suffixes: Dict[str, int]) -> list:
             suffixed.add(var)
     return suffixed
 
-def renumber(instr: Instr, suffixes: Dict[str, int]) -> List[str]:
+def renumber(instr: Instr, src: str, dst: str) -> Instr:
     renumbered = []
     for elem in instr:
         if isinstance(elem, str):
-            renumbered.append(apply_suffixes(set([elem]), suffixes).pop())
+            if elem == src:
+                renumbered.append(dst)
+            else:
+                renumbered.append(elem)
         elif isinstance(elem, list):
-            renumbered.append(renumber(elem, suffixes))
+            renumbered.append(renumber(elem, src, dst))
         else:
             renumbered.append(elem)
     return renumbered

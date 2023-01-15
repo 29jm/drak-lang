@@ -18,9 +18,25 @@ def compile(source: Path, dest: Path, args):
         if args.emit_only:
             print('\n'.join(('\n\t'.join(str(line) for line in block)) for block in opt))
         if args.cfg:
+            # opt[0] = [['main:'],
+            #     ['mov', 'REG4', '#50'],
+            #     ['cmp', 'REG4', '#3'],
+            #     ['bne', '.main_if_1'],
+            #     ['mov', 'REG4', '#0'],
+            #     ['b', '.main_if_2'],
+            #     ['.main_if_1:'],
+            #     ['mov', 'REG4', '#1'],
+            #     ['.main_if_2:'],
+            #     ['mov', 'r0', 'REG4'],
+            #     ['b', '.main_end'],
+            #     ['.main_end:'], ['bx', 'lr']]
             bblocks = ir_utils.basic_blocks(opt[0])
             cfg = ir_utils.control_flow_graph(bblocks)
-            dot = ir_utils.print_cfg_as_dot(cfg, bblocks)
+            lifetimes = liveness.block_liveness2(bblocks, cfg)
+            domf = ir_utils.dominance_frontier(cfg)
+            bblocks = ir_utils.phi_insertion(bblocks, cfg, domf, lifetimes)
+            bblocks = ir_utils.renumber_variables(bblocks, cfg)
+            dot = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes)
             svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot, stdout=subprocess.PIPE)
             subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
 

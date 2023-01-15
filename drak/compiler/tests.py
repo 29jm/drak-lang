@@ -366,5 +366,77 @@ class TestIRBlocks(unittest.TestCase):
             6: set([]),
         })
 
+    def test_phi_insertion(self):
+        bblocks = basic_blocks(self.simple_phi)
+        cfg = control_flow_graph(bblocks)
+        df = dominance_frontier(cfg)
+        lifetimes = block_liveness2(bblocks, cfg)
+        phi_inserted = phi_insertion(bblocks, cfg, df, lifetimes)
+        phi_instr = phi_inserted[3][1]
+        self.assertEqual(phi_instr[0], 'PHI')
+        self.assertEqual(phi_instr[1], 'REG4')
+        self.assertEqual(phi_instr[2][0], 'REG4')
+        self.assertEqual(phi_instr[2][1], 'REG4')
+
+    def test_renumbering_writes(self):
+        instr = ['mov', 'REG4', 'REG5']
+        self.assertEqual(
+            renumber_written(instr, 'REG4', 'renamed'),
+            ['mov', 'renamed', 'REG5'])
+        instr = ['mov', 'REG4', 'REG5']
+        self.assertEqual(
+            renumber_written(instr, 'REG5', 'renamed'),
+            ['mov', 'REG4', 'REG5'])
+        instr = ['add', 'REG4', 'REG4', 'REG4']
+        self.assertEqual(
+            renumber_written(instr, 'REG4', 'renamed'),
+            ['add', 'renamed', 'REG4', 'REG4'])
+        instr = ['push', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_written(instr, 'REG4', 'renamed'),
+            instr)
+        instr = ['PHI', 'REG4', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_written(instr, 'REG4', 'renamed'),
+            ['PHI', 'renamed', ['REG4', 'REG5', 'lr']])
+        instr = ['PHI', 'REG4', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_written(instr, 'REG5', 'renamed'),
+            ['PHI', 'REG4', ['REG4', 'REG5', 'lr']])
+
+    def test_renumbering_reads(self):
+        instr = ['mov', 'REG4', 'REG5']
+        self.assertEqual(
+            renumber_read(instr, 'REG4', 'renamed'),
+            instr)
+        instr = ['mov', 'REG4', 'REG5']
+        self.assertEqual(
+            renumber_read(instr, 'REG5', 'renamed'),
+            ['mov', 'REG4', 'renamed'])
+        instr = ['add', 'REG4', 'REG4', 'REG4']
+        self.assertEqual(
+            renumber_read(instr, 'REG4', 'renamed'),
+            ['add', 'REG4', 'renamed', 'renamed'])
+        instr = ['push', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_read(instr, 'REG4', 'renamed'),
+            ['push', ['renamed', 'REG5', 'lr']])
+        instr = ['PHI', 'REG4', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_read(instr, 'REG4', 'renamed'),
+            ['PHI', 'REG4', ['renamed', 'REG5', 'lr']])
+        instr = ['PHI', 'REG4', ['REG4', 'REG5', 'lr']]
+        self.assertEqual(
+            renumber_read(instr, 'REG4', 'renamed'),
+            ['PHI', 'REG4', ['renamed', 'REG5', 'lr']])
+
+    def test_renumering(self):
+        bblocks = basic_blocks(self.simple_phi)
+        cfg = control_flow_graph(bblocks)
+        lifetimes = block_liveness2(bblocks, cfg)
+        with_phis = phi_insertion(bblocks, cfg, dominance_frontier(cfg), lifetimes)
+        ren = renumber_variables(with_phis, cfg)
+        self.assertTrue(True)
+
 if __name__ == '__main__':
     unittest.main()
