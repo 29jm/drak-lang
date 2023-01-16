@@ -36,6 +36,7 @@ def compile(source: Path, dest: Path, args):
             domf = ir_utils.dominance_frontier(cfg)
             bblocks = ir_utils.phi_insertion(bblocks, cfg, domf, lifetimes)
             bblocks = ir_utils.renumber_variables(bblocks, cfg)
+            bblocks = ir_utils.simpliphy(bblocks)
             dot = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes)
             svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot, stdout=subprocess.PIPE)
             subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)

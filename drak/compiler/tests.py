@@ -1,4 +1,5 @@
 import unittest
+import copy
 from drak.compiler.ir_utils import *
 from drak.compiler.liveness import *
 
@@ -367,7 +368,7 @@ class TestIRBlocks(unittest.TestCase):
         })
 
     def test_phi_insertion(self):
-        bblocks = basic_blocks(self.simple_phi)
+        bblocks = basic_blocks(copy.deepcopy(self.simple_phi))
         cfg = control_flow_graph(bblocks)
         df = dominance_frontier(cfg)
         lifetimes = block_liveness2(bblocks, cfg)
@@ -431,12 +432,27 @@ class TestIRBlocks(unittest.TestCase):
             ['PHI', 'REG4', ['renamed', 'REG5', 'lr']])
 
     def test_renumering(self):
-        bblocks = basic_blocks(self.simple_phi)
+        bblocks = basic_blocks(copy.deepcopy(self.simple_phi))
         cfg = control_flow_graph(bblocks)
         lifetimes = block_liveness2(bblocks, cfg)
         with_phis = phi_insertion(bblocks, cfg, dominance_frontier(cfg), lifetimes)
         ren = renumber_variables(with_phis, cfg)
         self.assertTrue(True)
+
+    def test_simpliphying(self):
+        bblocks = basic_blocks(self.simple_phi)
+        cfg = control_flow_graph(bblocks)
+        df = dominance_frontier(cfg)
+        lifetimes = block_liveness2(bblocks, cfg)
+        phi_inserted = phi_insertion(bblocks, cfg, df, lifetimes)
+        ren = renumber_variables(phi_inserted, cfg)
+        phi_solved = simpliphy(ren)
+        pass
+        # phi_instr = phi_inserted[3][1]
+        # self.assertEqual(phi_instr[0], 'PHI')
+        # self.assertEqual(phi_instr[1], 'REG4')
+        # self.assertEqual(phi_instr[2][0], 'REG4')
+        # self.assertEqual(phi_instr[2][1], 'REG4')
 
 if __name__ == '__main__':
     unittest.main()

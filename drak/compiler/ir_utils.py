@@ -295,3 +295,40 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
         stacks[var] = []
 
     return rename(0)
+
+def simpliphy(bblocks: List[List[Instr]]) -> List[List[Instr]]:
+    """"Resolves phi functions into the appropriate copy operations.
+    Mode of operation:
+    For every phi function assignment x_i = φ(x_j, x_j', ...):
+        For every argument x_j of φ:
+            Let (block, idx) be the block and instruction at which x_j is defined.
+            Insert a copy instruction `mov x_i, x_j` after (block, idx).
+        Delete the phi function assignment.
+    """
+    # Gather rough locations of variable definitions
+    # Don't calculate precise indices here: they might move with phi deletions.
+    defs: Dict[str, int] = {}
+    for block in range(len(bblocks)):
+        for var in definitions_in_block(bblocks[block]):
+            defs[var] = block
+    # Hunt for phi functions
+    for block in bblocks:
+        i = 0
+        while i < len(block):
+            instr = block[i]
+            if 'PHI' not in instr[0]:
+                i += 1
+                continue
+            phi_assigned: str = instr[1]
+            phi_args: List[str] = instr[2]
+            # Find declarations of phi arguments, make copies
+            for phi_arg in phi_args:
+                source_block = defs[phi_arg]
+                for j, prey_instr in enumerate(bblocks[source_block]):
+                    if phi_arg in vars_written_by(prey_instr):
+                        bblocks[source_block].insert(j+1, ['mov', phi_assigned, phi_arg])
+                        break
+            # Delete the phi function assignment
+            block.pop(i)
+            # Intentionally don't increment `i`
+    return bblocks
