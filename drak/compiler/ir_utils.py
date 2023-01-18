@@ -125,7 +125,8 @@ def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
     """Computes the control flow graph of `bblocks`, represented by a dictionary
     from block index to successor block indices.
     The first block in the graph has index zero. Successor indices of -1 represent
-    function returns."""
+    function returns.
+    """
     graph: Dict[int, Set[int]] = {}
     for i in range(len(bblocks)):
         successors = block_successors(bblocks, i)
@@ -306,7 +307,6 @@ def simpliphy(bblocks: List[List[Instr]]) -> List[List[Instr]]:
         Delete the phi function assignment.
     """
     # Gather rough locations of variable definitions
-    # Don't calculate precise indices here: they might move with phi deletions.
     defs: Dict[str, int] = {}
     for block in range(len(bblocks)):
         for var in definitions_in_block(bblocks[block]):
@@ -321,13 +321,12 @@ def simpliphy(bblocks: List[List[Instr]]) -> List[List[Instr]]:
                 continue
             phi_assigned: str = instr[1]
             phi_args: List[str] = instr[2]
-            # Find declarations of phi arguments, make copies
+            # Insert a copy at the end of the block defining each phi argument
             for phi_arg in phi_args:
                 source_block = defs[phi_arg]
-                for j, prey_instr in enumerate(bblocks[source_block]):
-                    if phi_arg in vars_written_by(prey_instr):
-                        bblocks[source_block].insert(j+1, ['mov', phi_assigned, phi_arg])
-                        break
+                blen = len(bblocks[source_block])
+                insert_at = blen - 1 if is_jumping(bblocks[source_block][-1]) else blen
+                bblocks[source_block].insert(insert_at, ['mov', phi_assigned, phi_arg])
             # Delete the phi function assignment
             block.pop(i)
             # Intentionally don't increment `i`
