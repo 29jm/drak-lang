@@ -143,6 +143,19 @@ def print_cfg_as_dot(cfg: BGraph, bblocks, live_vars) -> str:
         dot += f"\t{b} -> {', '.join(str(s) for s in succ)}\n"
     return dot + "}\n"
 
+def print_igraph(cfg: Dict[str, Set[str]], colors: Dict[str, str], names=False) -> str:
+    dot = "strict graph G {\n"
+    for var, connected in cfg.items():
+        label = colors[var]
+        links = '{' + ', '.join(f'"{v}"' for v in sorted(connected)) + '}'
+        if links != '{}':
+            if names:
+                dot += f'\t"{var}" [label="{label}"]\n'
+            else:
+                dot += f'\t"{var}" [color="{label}"]\n'
+            dot += f'\t"{var}" -- {links}\n'
+    return dot + "}\n"
+
 def predecessors(cfg: BGraph, block: int) -> Set[int]:
     preds = set()
     for maybe_pred, successors in cfg.items():
@@ -194,8 +207,8 @@ def dominance_frontier(cfg: BGraph) -> BGraph:
     for n in cfg.keys():
         preds = predecessors(cfg, n)
         if len(preds) >= 2:
-            for preds in preds:
-                runner = preds
+            for pred in preds:
+                runner = pred
                 while runner != idoms[n]:
                     df[runner].add(n)
                     runner = idoms[runner]

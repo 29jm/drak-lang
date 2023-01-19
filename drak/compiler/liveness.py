@@ -124,18 +124,32 @@ def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
     
     return nodes
 
-def coalesce(blocks: List[Instr], blives: BLives, igraph: IGraph) -> Tuple[BLives, List[Instr]]:
-    for i in range(len(blocks)):
-        instr = blocks[i]
-        written, read = vars_written_by(instr), vars_read_by(instr)
-        if not written or not read:
-            continue
-        copy_related = is_copy_instruction(instr)
-        interfere = len(written) == 1 and written[0] in igraph[read[0]]
-        if copy_related and not interfere: # Coalesce
-            blocks = rename(blocks, written[0], read[0])
-            blives = [set(rename(life, written[0], read[0])) for life in blives]
-    return blives, blocks
+def coalesce(bblocks: List[Instr], cfg: BGraph, igraph: Dict[str, Set[str]]) -> List[List[Instr]]:
+    """Coalesce copies within basic blocks, making sure not to eliminate variables
+    that are more globally live, i.e. those live in successor blocks.
+    Examples:
+     - mov R1, R2 | if R1 is not live at block exit, we get:
+       mov R3, R1 | -> mov R3, R2
+    Really TODO.
+    """
+    for n in range(len(bblocks)):
+        i = 0
+        while i < len(bblocks[n]):
+            instr = bblocks[n][i]
+            written, read = vars_written_by(instr), vars_read_by(instr)
+            if not written or not read:
+                i += 1
+                continue
+            copy_related = is_copy_instruction(instr)
+            interfere = len(written) == 1 and written[0] in igraph[read[0]]
+            if copy_related and not interfere: # Coalesce
+                print(f"Coalescing {written[0]} into {read[0]}")
+                bblocks = rename(bblocks, written[0], read[0]) # Rename things right
+                bblocks[n].pop(i)
+            else:
+                i += 1
+
+    return bblocks
 
 def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
     """Deletes:
@@ -151,6 +165,19 @@ def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
             continue
         simplified.append(block)
     return simplified
+
+def global_igraph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
+    # Build full interference graph
+    cfg = control_flow_graph(bblocks)
+    glob_lifetimes = block_liveness2(bblocks, cfg)
+    in_block_lifetimes: List[Set[str]] = []
+    for n, block in enumerate(bblocks):
+        out_live = set()
+        for succ in cfg[n]:
+            out_live |= glob_lifetimes[succ]
+        in_block_lifetimes.extend(liveness(block, out_live))
+    igraph = interference_graph(in_block_lifetimes)
+    return igraph
 
 if __name__ == '__main__':
     pass

@@ -6,6 +6,7 @@ import drak.parser.parser as parser
 import drak.compiler.compiler as compiler
 import drak.compiler.liveness as liveness
 import drak.compiler.ir_utils as ir_utils
+import drak.compiler.coloring as coloring
 import subprocess
 
 def compile(source: Path, dest: Path, args):
@@ -30,6 +31,10 @@ def compile(source: Path, dest: Path, args):
             #     ['mov', 'r0', 'REG4'],
             #     ['b', '.main_end'],
             #     ['.main_end:'], ['bx', 'lr']]
+            colorschemes = [
+                set(['red', 'blue', 'green', 'magenta', 'cyan']),
+                set([f'r{i}' for i in range(4, 13)]),
+            ]
             bblocks = ir_utils.basic_blocks(opt[0])
             cfg = ir_utils.control_flow_graph(bblocks)
             lifetimes = liveness.block_liveness2(bblocks, cfg)
@@ -38,8 +43,35 @@ def compile(source: Path, dest: Path, args):
             bblocks = ir_utils.renumber_variables(bblocks, cfg)
             bblocks = ir_utils.simpliphy(bblocks)
             lifetimes = liveness.block_liveness2(bblocks, cfg)
-            dot = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes)
-            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot, stdout=subprocess.PIPE)
+            igraph = liveness.global_igraph(bblocks)
+            before = len(igraph)
+            bblocks = liveness.coalesce(bblocks, cfg, igraph)
+            igraph = liveness.global_igraph(bblocks)
+            after = len(igraph)
+
+            # colors = coloring.color(igraph, colorschemes[0])
+            # dot_igraph = ir_utils.print_igraph(igraph, colors, names=False)
+            # svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_igraph, stdout=subprocess.PIPE)
+            # subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
+            colors = coloring.color(igraph, colorschemes[1])
+            dot_igraph = ir_utils.print_igraph(igraph, colors, names=True)
+            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_igraph, stdout=subprocess.PIPE)
+            subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
+
+            print(f"Coalesced {before} nodes into {after}")
+            print(colors)
+            # print(dot_igraph)
+
+            lifetimes2 = liveness.block_liveness2(bblocks, cfg)
+            dot_non_alloc = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes2)
+            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_non_alloc, stdout=subprocess.PIPE)
+            subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
+
+            for n, color in colors.items():
+                bblocks = liveness.rename(bblocks, n, color)
+            lifetimes3 = liveness.block_liveness2(bblocks, cfg)
+            dot_non_alloc = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes3)
+            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_non_alloc, stdout=subprocess.PIPE)
             subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
 
     name_asm = (dest.parent / dest.stem).with_suffix('.asm')
