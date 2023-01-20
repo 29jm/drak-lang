@@ -1,4 +1,6 @@
-from typing import Dict, Set, TypeVar
+from typing import Dict, Set, List, TypeVar
+from drak.compiler.ir_utils import Instr, vars_written_by, vars_read_by
+from drak.compiler.liveness import global_igraph, rename
 
 T = TypeVar("T")
 C = TypeVar("C")
@@ -24,3 +26,81 @@ def color(graph: Dict[T, Set[T]], colors: Set[C]) -> Dict[T, C]|None:
         coloring[picked] = (colors - taken).pop()
 
     return coloring
+
+def spillvars(bblocks: List[List[Instr]], spills: Dict[str, str]):
+    """Spills @spills.keys() (e.g. REG13.1) into @spills.values() (e.g. REGSPILL.4)."""
+    n, i = 0, 0
+    stackspace = 4 * len(spills) + 4
+    stackrefs = {var: -(4+4*n) for (n, var) in enumerate(spills.keys())}
+
+    bblocks[0].insert(2, ['sub', 'sp', 'sp', f'#{stackspace}'])
+
+    while n < len(bblocks):
+        i = 0
+        while i < len(bblocks[n]):
+            instr = bblocks[n][i]
+            added_instrs = 0
+            read = set(spills.keys()) & set(vars_read_by(instr))
+            writ = set(spills.keys()) & set(vars_written_by(instr))
+
+            for var in writ:
+                bblocks[n].insert(i+1, ['str', var, ['sp', f'#{stackrefs[var]}']])
+                added_instrs += 1
+            for var in read:
+                bblocks[n].insert(i, ['ldr', var, ['sp', f'#{stackrefs[var]}']])
+                added_instrs += 1
+
+            i += 1 + added_instrs
+        n += 1
+    return bblocks
+
+def spillcosts(bblocks: List[List[Instr]], vars: set) -> Dict[str, int]:
+    costs: Dict[str, int] = {}
+    for block in bblocks:
+        for instr in block:
+            for var in vars & (set(vars_read_by(instr)) | set(vars_written_by(instr))):
+                if not var in costs:
+                    costs[var] = 1
+                else:
+                    costs[var] += 1
+    return costs
+
+def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
+    """"Allocates registers in @regs to variables in @bblocks, given the interference
+    graph in @graph.
+    """
+    done: bool = False
+    spills = []
+    graph = global_igraph(bblocks)
+
+    while not done:
+        coloring = color(graph, regs)
+
+        if coloring != None:
+            break
+
+        # Compute spill costs per variable
+        costs = spillcosts(bblocks, set(graph.keys()))
+
+        # Spill the least costly variable that's still reasonably connected
+        spilled = min(costs, key=lambda n: costs[n]/(len(graph[n])+0.5))
+        spills.append(spilled)
+
+        # Update the graph
+        graph = { node: { edge for edge in graph[node] if edge != spilled }
+                        for node in graph.keys() if node != spilled }
+
+    spilldict = {var: f'REGSPILL{i}' for i, var in enumerate(spills)}
+    bblocks = spillvars(bblocks, spilldict)
+
+    # Recompute and recolor the graph
+    graph = global_igraph(bblocks)
+    coloring = color(graph, regs)
+    if coloring == None:
+        return regalloc(bblocks, regs)
+
+    # Apply the colors
+    for var, reg in coloring.items():
+        bblocks = rename(bblocks, var, reg)
+
+    return bblocks

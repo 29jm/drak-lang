@@ -19,18 +19,6 @@ def compile(source: Path, dest: Path, args):
         if args.emit_only:
             print('\n'.join(('\n\t'.join(str(line) for line in block)) for block in opt))
         if args.cfg:
-            # opt[0] = [['main:'],
-            #     ['mov', 'REG4', '#50'],
-            #     ['cmp', 'REG4', '#3'],
-            #     ['bne', '.main_if_1'],
-            #     ['mov', 'REG4', '#0'],
-            #     ['b', '.main_if_2'],
-            #     ['.main_if_1:'],
-            #     ['mov', 'REG4', '#1'],
-            #     ['.main_if_2:'],
-            #     ['mov', 'r0', 'REG4'],
-            #     ['b', '.main_end'],
-            #     ['.main_end:'], ['bx', 'lr']]
             colorschemes = [
                 set(['red', 'blue', 'green', 'magenta', 'cyan']),
                 set([f'r{i}' for i in range(4, 13)]),
@@ -49,10 +37,12 @@ def compile(source: Path, dest: Path, args):
             igraph = liveness.global_igraph(bblocks)
             after = len(igraph)
 
-            # colors = coloring.color(igraph, colorschemes[0])
-            # dot_igraph = ir_utils.print_igraph(igraph, colors, names=False)
-            # svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_igraph, stdout=subprocess.PIPE)
-            # subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
+            bblocks = coloring.regalloc(bblocks, set(['r4', 'r5', 'r6']))
+
+            colors = coloring.color(igraph, colorschemes[0])
+            dot_igraph = ir_utils.print_igraph(igraph, colors, names=False)
+            svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_igraph, stdout=subprocess.PIPE)
+            subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
             colors = coloring.color(igraph, colorschemes[1])
             dot_igraph = ir_utils.print_igraph(igraph, colors, names=True)
             svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_igraph, stdout=subprocess.PIPE)
