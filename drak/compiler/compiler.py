@@ -244,7 +244,6 @@ def compile(prog: List[AstNode]) -> List[List[Asm]]:
     return asm
 
 def compile_to_asm(prog: List[AstNode], strip=False) -> str:
-    return '\n'.join(str(line) for line in compile(prog))
     return __raw_printer(compile(prog), strip_comments=strip)
 
 def __inline_asm_printer(asm) -> str:
@@ -276,7 +275,7 @@ def intermediate_to_asm(ilblock: List[Asm]):
         if len(instr) == 1:
             return instr[0]
         return f'{instr[0]} {", ".join(op2asm(op) for op in instr[1:])}'
-    return '\n'.join(instr_to_asm(ins) for ins in ilblock) + '\n'
+    return __raw_printer([instr_to_asm(ins) for ins in ilblock])
 
 if __name__ == '__main__':
     from sys import argv

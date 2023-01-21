@@ -26,7 +26,7 @@ def compile(source: Path, dest: Path, args):
             igraph = liveness.global_igraph(bblocks)
             bblocks = liveness.coalesce(bblocks, cfg, igraph)
             bblocks = coloring.regalloc(bblocks, set([f'r{i}' for i in range(4, 13)]))
-            output += '\n'.join(compiler.intermediate_to_asm(block) for block in bblocks)
+            output += ''.join(compiler.intermediate_to_asm(block) for block in bblocks)
 
         dst.write(output)
 

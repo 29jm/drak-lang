@@ -33,6 +33,7 @@ def spillvars(bblocks: List[List[Instr]], spills: Dict[str, str]):
     stackspace = 4 * len(spills) + 4
     stackrefs = {var: -(4+4*n) for (n, var) in enumerate(spills.keys())}
 
+    print(f'Spilling {spills.keys()}')
     bblocks[0].insert(2, ['sub', 'sp', 'sp', f'#{stackspace}'])
 
     while n < len(bblocks):
@@ -90,8 +91,9 @@ def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
         graph = { node: { edge for edge in graph[node] if edge != spilled }
                         for node in graph.keys() if node != spilled }
 
-    spilldict = {var: f'REGSPILL{i}' for i, var in enumerate(spills)}
-    bblocks = spillvars(bblocks, spilldict)
+    if spills:
+        spilldict = {var: f'REGSPILL{i}' for i, var in enumerate(spills)}
+        bblocks = spillvars(bblocks, spilldict)
 
     # Recompute and recolor the graph
     graph = global_igraph(bblocks)
