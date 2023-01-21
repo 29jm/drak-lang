@@ -10,22 +10,27 @@ from drak.compiler.expression import compile_expression
 from drak.compiler.idtype import IdType, IntType, BoolType
 
 # Intrinsics
-asm_prolog = """
-    .global _start
-    _start:
-    bl main
-    mov r7, #1
-    svc #0
-    print_char:
-        push {r0, r1, r2, r7}
-        mov r7, #4 // Syscall number
-        mov r0, #1 // stdout, hopefully
-        mov r1, sp // str address
-        mov r2, #1 // str len
-        svc #0
-        pop {r0, r1, r2, r7}
-        bx lr
-""".strip().splitlines()
+asm_prolog = [
+    [
+        ['_start:'],
+            ['.global', '_start'],
+            ['bl', 'main'],
+            ['mov', 'r7', '#1'],
+            ['svc', '#0'], # Exit system call
+            ['bx', 'lr']   # TODO: This should be more symbolic, e.g. 'FUNC_RET(val)'
+    ],
+    [
+        ['print_char:'],
+            ['push', ['r0', 'r1', 'r2', 'r7']],
+            ['mov', 'r7', '#4'], # Syscall number
+            ['mov', 'r0', '#1'], # stdout, hopefully
+            ['mov', 'r1', 'sp'], # str address
+            ['mov', 'r2', '#1'], # str len
+            ['svc', '#0'],
+            ['pop', ['r0', 'r1', 'r2', 'r7']],
+            ['bx', 'lr']
+    ]
+]
 
 def compile_assignment(stmt: AstNode, ctx: FnContext) -> Asm:
     asm = []
@@ -228,11 +233,10 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
 
     return asm
 
-def compile(prog: List[AstNode]) -> Asm:
+def compile(prog: List[AstNode]) -> List[List[Asm]]:
     ctx = FnContext('_start')
-    # ctx.functions['print_char'] = [IdType('none'), IntType]
-    # asm = asm_prolog
-    asm = []
+    ctx.functions['print_char'] = [IdType('none'), IntType]
+    asm = asm_prolog
 
     for stmt in prog:
         asm += [compile_statement(stmt, ctx)]
@@ -261,6 +265,18 @@ def __raw_printer(asm, strip_comments=False) -> str:
     asm = (_indent(line) for line in asm)
     asm = [line for line in asm if line.strip() != ""]
     return '\n'.join(_indent(line) for line in asm) + '\n'
+
+def intermediate_to_asm(ilblock: List[Asm]):
+    def op2asm(op):
+        if isinstance(op, list):
+            subops = ', '.join(str(subop) for subop in op)
+            return '{' + subops + '}'
+        return op
+    def instr_to_asm(instr: Asm) -> str:
+        if len(instr) == 1:
+            return instr[0]
+        return f'{instr[0]} {", ".join(op2asm(op) for op in instr[1:])}'
+    return '\n'.join(instr_to_asm(ins) for ins in ilblock) + '\n'
 
 if __name__ == '__main__':
     from sys import argv

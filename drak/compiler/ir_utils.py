@@ -22,6 +22,9 @@ BGraph = Dict[int, Set[int]]
 # Live variables at each step in a basic block.
 BLives = List[LiveSet]
 
+# Regexes
+regex_label = r'(\.?[a-zA-Z0-9_]+):'
+
 def vars_in(operands: List[str]) -> list:
     nonlit = []
     for op in operands:
@@ -77,11 +80,23 @@ def is_jumping(instr: Instr) -> bool:
     jumps = ['b', 'bx', 'blx', 'bl']
     return instr[0] in jumps or is_conditional_jump(instr)
 
+def is_local_jump(block: List[Instr], instr: Instr) -> bool:
+    """Returns whether the instruction performs a function-local jump."""
+    if not is_jumping(instr):
+        return False
+
+    for ins in block:
+        if (m := re.match(regex_label, ins[0])):
+            if m.group(1) == instr[1]:
+                return True
+
+    return False
+
 def block_successors(bblocks: List[List[Instr]], block_no: int) -> List[int]:
     """Returns the block indices of the successors of block `block_no`.
     By convention, instruction -1 will represent return from function."""
     instr = bblocks[block_no][-1]
-    if not is_jumping(instr): # Execution moves to next block
+    if not is_jumping(instr): # Execution moves to next block if any
         return [block_no + 1]
     elif instr[0] == 'bx': # Return from function
         return [-1]
@@ -107,10 +122,10 @@ def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
         if i == 0:
             pass
         # Targets of a jump are leaders
-        elif re.match(r'\.[a-zA-Z0-9_]+:', instr[0]):
+        elif re.match(regex_label, instr[0]):
             leader_indices.append(i)
         # Instructions following jumps are leaders
-        elif is_jumping(func_block[i-1]):
+        elif is_local_jump(func_block, func_block[i-1]):
             leader_indices.append(i)
 
     # Build blocks
