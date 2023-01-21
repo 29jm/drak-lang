@@ -30,7 +30,12 @@ def print_nth_digit(num: int, n: int): int {
     print_char(48 + get_nth_digit(num, n));
 }
 
-def print(n: int): none { ndig: int = count_digits(n) - 1; while ndig != 0 { print_nth_digit(n, ndig);
+def print(n: int): none {
+    ndig: int = count_digits(n) - 1;
+ 
+    while ndig != 0
+    {
+        print_nth_digit(n, ndig);
         ndig = ndig - 1;
     }
 

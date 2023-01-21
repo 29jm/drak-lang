@@ -72,26 +72,27 @@ def compile_function_call(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: A
 
     if not fn_name in ctx.functions.keys():
         print(f'Error, function {fn_name} called before definition')
-    if target_reg == 0:
-        print(f'// target reg of {stmt.token_value()} is r0, will fail')
 
-    asm.append(['push', ['r0', 'r1', 'r2', 'r3']])
+    # asm.append(['push', ['r0', 'r1', 'r2', 'r3']])
 
     paramtypes = ctx.functions[fn_name][1:]
+    argregs = []
     for (i, arg), paramtype in zip(enumerate(stmt.children), paramtypes):
-        ret_reg = ctx.get_free_reg(asm)
-        argtype = compile_expression(arg, ret_reg, ctx, asm)
-        asm.append(['mov', f'REG{i}', f'REG{ret_reg}'])
-        ctx.release_reg(ret_reg, asm)
+        argreg = ctx.get_free_reg(asm)
+        argtype = compile_expression(arg, argreg, ctx, asm)
+        argregs.append(argreg)
 
         if argtype != paramtype:
             print(f'Error, in call to {fn_name}, expected argument of type {paramtype}, got {argtype}')
+    for i, argreg in enumerate(argregs):
+        asm.append(['mov', f'r{i}', f'REG{argreg}'])
+        ctx.release_reg(argreg, asm)
 
     asm.append(['bl', f'{fn_name}'])
 
-    if target_reg:
+    if target_reg and target_reg != 0:
         asm.append(['mov', f'REG{target_reg}', 'r0'])
 
-    asm.append(['pop', ['r0', 'r1', 'r2', 'r3']])
+    # asm.append(['pop', ['r0', 'r1', 'r2', 'r3']])
 
     return ctx.functions[fn_name][0]

@@ -81,11 +81,13 @@ def is_jumping(instr: Instr) -> bool:
     return instr[0] in jumps or is_conditional_jump(instr)
 
 def is_local_jump(block: List[Instr], instr: Instr) -> bool:
-    """Returns whether the instruction performs a function-local jump."""
+    """Returns whether the instruction performs a function-local jump, which is not
+    a recursive call either.
+    """
     if not is_jumping(instr):
         return False
 
-    for ins in block:
+    for ins in block[1:]: # Don't consider first instruction: it's the function label
         if (m := re.match(regex_label, ins[0])):
             if m.group(1) == instr[1]:
                 return True
@@ -96,10 +98,20 @@ def block_successors(bblocks: List[List[Instr]], block_no: int) -> List[int]:
     """Returns the block indices of the successors of block `block_no`.
     By convention, instruction -1 will represent return from function."""
     instr = bblocks[block_no][-1]
-    if not is_jumping(instr): # Execution moves to next block if any
+
+    block_labels = []
+    for b in bblocks:
+        for ins in b:
+            if (m := re.match(regex_label, ins[0])):
+                block_labels.append(m.group(1))
+    block_labels.pop(0) # Pop function label
+
+    if not is_jumping(instr):
         return [block_no + 1]
     elif instr[0] == 'bx': # Return from function
         return [-1]
+    elif not instr[1] in block_labels:
+        return [block_no + 1]
     else: # Jump to label, conditional or not
         is_conditional = is_conditional_jump(instr)
         target_label = instr[1]

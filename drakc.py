@@ -16,6 +16,7 @@ def compile(source: Path, dest: Path, args):
         il = compiler.compile(toks)
         output = ""
         for func in il:
+            print(func[0])
             bblocks = ir_utils.basic_blocks(func)
             cfg = ir_utils.control_flow_graph(bblocks)
             lifetimes = liveness.block_liveness2(bblocks, cfg)

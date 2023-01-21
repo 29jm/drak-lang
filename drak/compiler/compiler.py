@@ -141,9 +141,7 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
 
 def compile_func_call(stmt: AstNode, ctx: FnContext) -> Asm:
     asm = []
-    ret_reg = ctx.get_free_reg(asm)
-    _ = compile_expression(stmt, ret_reg, ctx, asm) # TBD, type?
-    ctx.release_reg(ret_reg, asm)
+    _ = compile_expression(stmt, 0, ctx, asm) # TBD, type?
     return asm
 
 def compile_if(stmt: AstNode, ctx: FnContext) -> Asm:
