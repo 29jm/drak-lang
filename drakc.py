@@ -24,8 +24,10 @@ def compile(source: Path, dest: Path, args):
             bblocks = ir_utils.phi_insertion(bblocks, cfg, domf, lifetimes)
             bblocks = ir_utils.renumber_variables(bblocks, cfg)
             bblocks = ir_utils.simpliphy(bblocks)
+
             igraph = liveness.global_igraph(bblocks)
-            bblocks = liveness.coalesce(bblocks, cfg, igraph)
+            bblocks = liveness.coalesce(bblocks, igraph)
+
             bblocks = coloring.regalloc(bblocks, set([f'r{i}' for i in range(4, 13)]))
             output += ''.join(compiler.intermediate_to_asm(block) for block in bblocks)
             if args.cfg:

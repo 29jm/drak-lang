@@ -124,7 +124,7 @@ def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
     
     return nodes
 
-def coalesce(bblocks: List[Instr], cfg: BGraph, igraph: Dict[str, Set[str]]) -> List[List[Instr]]:
+def coalesce(bblocks: List[Instr], igraph: Dict[str, Set[str]]) -> List[List[Instr]]:
     """Coalesce copies that don't interfere."""
     for n in range(len(bblocks)):
         i = 0
@@ -139,8 +139,11 @@ def coalesce(bblocks: List[Instr], cfg: BGraph, igraph: Dict[str, Set[str]]) -> 
             copy_related = is_copy_instruction(instr)
             interfere = len(written) == 1 and written[0] in igraph[read[0]]
             fixed_register = len(written) == 1 and written[0].startswith('REGF')
+            same = copy_related and written[0] == read[0]
 
-            if copy_related and not interfere and not fixed_register: # Coalesce
+            if same:
+                bblocks[n].pop(i)
+            elif copy_related and not interfere and not fixed_register: # Coalesce
                 # print(f"Coalescing {written[0]} into {read[0]}")
                 bblocks = rename(bblocks, written[0], read[0]) # Rename things right
                 bblocks[n].pop(i)
