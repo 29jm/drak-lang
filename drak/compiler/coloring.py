@@ -1,13 +1,13 @@
 from typing import Dict, Set, List, TypeVar
-from drak.compiler.ir_utils import Instr, vars_written_by, vars_read_by
+from drak.compiler.ir_utils import Instr, vars_written_by, vars_read_by, is_fixed_alloc_variable
 from drak.compiler.liveness import global_igraph, rename
 
 T = TypeVar("T")
 C = TypeVar("C")
-def color(graph: Dict[T, Set[T]], colors: Set[C]) -> Dict[T, C]|None:
+def color(graph: Dict[T, Set[T]], colors: Set[C], fixed_colors: Dict[T, C]) -> Dict[T, C]|None:
     # No graph, no coloring needed
     if not graph:
-        return {}
+        return fixed_colors
 
     # Pick a potentially colorable node, or fail entirely
     picked = next((n for n in graph if len(graph[n]) < len(colors)), None)
@@ -18,10 +18,10 @@ def color(graph: Dict[T, Set[T]], colors: Set[C]) -> Dict[T, C]|None:
     # We have at least one low degree node, remove it and color the rest
     graphbis = { node: { edge for edge in graph[node] if edge != picked }
                     for node in graph.keys() if node != picked }
-    coloring = color(graphbis, colors)
+    coloring = color(graphbis, colors, fixed_colors)
 
-    # If the reduced graph was colorable, paint in the node we excluded
-    if coloring != None:
+    # If the reduced graph was colorable, paint in the node we excluded, if needed
+    if coloring != None and picked not in coloring:
         taken = set(coloring[adjacent] for adjacent in graph[picked])
         coloring[picked] = (colors - taken).pop()
 
@@ -73,9 +73,16 @@ def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
     done: bool = False
     spills = []
     graph = global_igraph(bblocks)
+    fixed_colors: Dict[str, str] = {}
+
+    for node, deps in graph.items():
+        for n in deps | set([node]):
+            if not is_fixed_alloc_variable(n):
+                continue
+            fixed_colors[n] = f'r{n.removeprefix("REGF")}'
 
     while not done:
-        coloring = color(graph, regs)
+        coloring = color(graph, regs, fixed_colors)
 
         if coloring != None:
             break
@@ -97,7 +104,7 @@ def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
 
     # Recompute and recolor the graph
     graph = global_igraph(bblocks)
-    coloring = color(graph, regs)
+    coloring = color(graph, regs, fixed_colors)
     if coloring == None:
         return regalloc(bblocks, regs)
 

@@ -73,8 +73,6 @@ def compile_function_call(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: A
     if not fn_name in ctx.functions.keys():
         print(f'Error, function {fn_name} called before definition')
 
-    # asm.append(['push', ['r0', 'r1', 'r2', 'r3']])
-
     paramtypes = ctx.functions[fn_name][1:]
     argregs = []
     for (i, arg), paramtype in zip(enumerate(stmt.children), paramtypes):
@@ -85,14 +83,14 @@ def compile_function_call(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: A
         if argtype != paramtype:
             print(f'Error, in call to {fn_name}, expected argument of type {paramtype}, got {argtype}')
     for i, argreg in enumerate(argregs):
-        asm.append(['mov', f'r{i}', f'REG{argreg}'])
+        asm.append(['mov', f'REGF{i}', f'REG{argreg}']) # F for Fixed color
         ctx.release_reg(argreg, asm)
 
-    asm.append(['bl', f'{fn_name}'])
+    asm.append(['bl', f'{fn_name}',
+        [f'REGF{i}' for i in range(len(argregs))], # Parameters are marked as read
+        [f'REGF{i}' for i in range(4)]]) # Assume all r0-r3 are clobbered
 
     if target_reg and target_reg != 0:
-        asm.append(['mov', f'REG{target_reg}', 'r0'])
-
-    # asm.append(['pop', ['r0', 'r1', 'r2', 'r3']])
+        asm.append(['mov', f'REG{target_reg}', 'REGF0'])
 
     return ctx.functions[fn_name][0]

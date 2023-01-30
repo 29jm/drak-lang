@@ -37,7 +37,7 @@ def vars_in(operands: List[str]) -> list:
 def ops_read_by(instr: Instr) -> List[int]:
     """Returns the indices in @instr containing operands being read."""
     indices = list(range(len(instr)))
-    if instr[0] in ['cmp', 'push', 'jmp'] or instr[0].startswith('b'):
+    if instr[0] in ['cmp', 'push', 'jmp']:
         return indices[1:]
     elif instr[0] in ['add', 'sub', 'mul', 'div', 'sdiv']:
         if len(instr[1:]) == 2:
@@ -46,6 +46,18 @@ def ops_read_by(instr: Instr) -> List[int]:
             return indices[2:]
     elif instr[0] == 'str':
         return [1]
+    elif instr[0] == 'funcdef':
+        return []
+    elif instr[0] == 'bx':
+        if instr[1] == 'lr' and len(instr) > 2:
+            return indices[2:]
+        else:
+            return indices[1:]
+    elif instr[0] == 'bl':
+        if len(indices) >= 3:
+            return indices[2:3]
+        else:
+            return []
     return indices[2:]
 
 def ops_written_by(instr: Instr) -> List[int]:
@@ -57,6 +69,13 @@ def ops_written_by(instr: Instr) -> List[int]:
         return indices[1:]
     elif instr[0] == 'str':
         return indices[2:]
+    elif instr[0] == 'funcdef':
+        return indices[2:]
+    elif instr[0] == 'bl':
+        if len(indices) >= 4:
+            return indices[3:4]
+        else:
+            return []
     return indices[1:2]
 
 def vars_read_by(instr: Instr) -> List[str]:
@@ -66,6 +85,10 @@ def vars_read_by(instr: Instr) -> List[str]:
 def vars_written_by(instr: Instr) -> List[str]:
     """Returns registers written to by @instr."""
     return vars_in(instr[op] for op in ops_written_by(instr))
+
+def is_fixed_alloc_variable(var: str) -> bool:
+    """Returns whether the variable is fixed to a register."""
+    return var.startswith('REGF')
 
 def is_copy_instruction(instr: Instr) -> bool:
     inputs = len(vars_read_by(instr))
@@ -94,9 +117,9 @@ def is_local_jump(block: List[Instr], instr: Instr) -> bool:
 
     return False
 
-def block_successors(bblocks: List[List[Instr]], block_no: int) -> List[int]:
+def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
     """Returns the block indices of the successors of block `block_no`.
-    By convention, instruction -1 will represent return from function."""
+    By convention, the last block, and maybe deadcode, will have no successor."""
     instr = bblocks[block_no][-1]
 
     block_labels = []
@@ -104,14 +127,13 @@ def block_successors(bblocks: List[List[Instr]], block_no: int) -> List[int]:
         for ins in b:
             if (m := re.match(regex_label, ins[0])):
                 block_labels.append(m.group(1))
-    block_labels.pop(0) # Pop function label
 
     if not is_jumping(instr):
-        return [block_no + 1]
+        return set([block_no + 1])
     elif instr[0] == 'bx': # Return from function
-        return [-1]
+        return set()
     elif not instr[1] in block_labels:
-        return [block_no + 1]
+        return set([block_no + 1])
     else: # Jump to label, conditional or not
         is_conditional = is_conditional_jump(instr)
         target_label = instr[1]
@@ -119,8 +141,8 @@ def block_successors(bblocks: List[List[Instr]], block_no: int) -> List[int]:
             lead_instr = block[0]
             if ':' in lead_instr[0] and lead_instr[0].split(':')[0] == target_label:
                 if is_conditional:
-                    return [i, block_no + 1]
-                return [i]
+                    return set([i, block_no + 1])
+                return set([i])
     print('Error, successor(s) not found')
 
 def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
@@ -151,8 +173,7 @@ def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
 def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
     """Computes the control flow graph of `bblocks`, represented by a dictionary
     from block index to successor block indices.
-    The first block in the graph has index zero. Successor indices of -1 represent
-    function returns.
+    The first block in the graph has index zero. No successors indicate end block.
     """
     graph: Dict[int, Set[int]] = {}
     for i in range(len(bblocks)):
@@ -167,7 +188,8 @@ def print_cfg_as_dot(cfg: BGraph, bblocks, live_vars) -> str:
     for b, succ in cfg.items():
         live = ', '.join(v for v in sorted(live_vars[b]))
         dot += f'\t{b} [label="{print_block(bblocks[b])}",xlabel="{b}: {live}",shape=box]\n'
-        dot += f"\t{b} -> {', '.join(str(s) for s in succ)}\n"
+        if succ:
+            dot += f"\t{b} -> {', '.join(str(s) for s in succ)}\n"
     return dot + "}\n"
 
 def print_igraph(cfg: Dict[str, Set[str]], colors: Dict[str, str], names=False) -> str:
@@ -303,12 +325,16 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
         for i, instr in enumerate(bblocks[block]):
             if not 'PHI' in instr[0]:
                 for var in vars_read_by(instr):
-                    varidx = stacks[var][-1]
+                    if is_fixed_alloc_variable(var):
+                        continue
+                    varidx = stacks[noprefix(var)][-1]
                     bblocks[block][i] = renumber_read(instr, var, f'{var}.{varidx}')
             for var in vars_written_by(instr):
-                counts[var] += 1
-                varidx = counts[var]
-                stacks[var].append(varidx)
+                if is_fixed_alloc_variable(var):
+                    continue
+                counts[noprefix(var)] += 1
+                varidx = counts[noprefix(var)]
+                stacks[noprefix(var)].append(varidx)
                 renumber_written(bblocks[block][i], var, f'{var}.{varidx}')
         for i, succ in enumerate(cfg[block]):
             for j, instr in enumerate(bblocks[succ]):
@@ -316,12 +342,18 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
                     continue
                 pred_no = sorted(predecessors(cfg, succ)).index(block)
                 phi_arg = instr[1]
+
+                if is_fixed_alloc_variable(phi_arg):
+                    continue
+
                 idx = stacks[noprefix(phi_arg)][-1]
                 bblocks[succ][j][2][pred_no] = f'{noprefix(phi_arg)}.{idx}'
         for child in domtree[block]:
             rename(child)
         for instr in bblocks[block]:
             for var in vars_written_by(instr):
+                if is_fixed_alloc_variable(var):
+                    continue
                 stacks[noprefix(var)].pop()
         return bblocks
 

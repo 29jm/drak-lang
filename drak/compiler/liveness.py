@@ -85,14 +85,14 @@ def block_liveness(bblocks: List[List[Instr]], cfg: BGraph) -> Dict[int, Set[str
                 comp_lifetimes[b] |= lives
         return comp_lifetimes
 
-    life = {n: set() for n in cfg.keys()} | {-1: set()}
+    life = {n: set() for n in cfg.keys()}
     edges_visited: Set[Tuple[int, int]] = set()
 
-    return comp(-1, life, edges_visited)
+    return comp(len(bblocks) - 1, life, edges_visited)
 
 def block_liveness2(bblocks: List[List[Instr]], cfg: BGraph) -> Set[int, Set[str]]:
     worklist = set(cfg.keys())
-    in_states = {n: set() for n in cfg.keys()} | {-1: set()}
+    in_states = {n: set() for n in cfg.keys()}
 
     while worklist:
         block = worklist.pop()
@@ -138,9 +138,10 @@ def coalesce(bblocks: List[Instr], cfg: BGraph, igraph: Dict[str, Set[str]]) -> 
 
             copy_related = is_copy_instruction(instr)
             interfere = len(written) == 1 and written[0] in igraph[read[0]]
+            fixed_register = len(written) == 1 and written[0].startswith('REGF')
 
-            if copy_related and not interfere: # Coalesce
-                print(f"Coalescing {written[0]} into {read[0]}")
+            if copy_related and not interfere and not fixed_register: # Coalesce
+                # print(f"Coalescing {written[0]} into {read[0]}")
                 bblocks = rename(bblocks, written[0], read[0]) # Rename things right
                 bblocks[n].pop(i)
             else:

@@ -289,6 +289,10 @@ class TestIRBlocks(unittest.TestCase):
               ['pop', ['r4-r12', 'lr']],
               ['bx', 'lr']]])
 
+    def test_block_successors(self):
+        bblocks = basic_blocks(self.fnblocks)
+        self.assertEqual(block_successors(bblocks, 0), set([1, 2]))
+
     def test_control_flow_graph_1(self):
         bblocks = basic_blocks(self.fnblocks)
         cfg = control_flow_graph(bblocks)
@@ -298,7 +302,7 @@ class TestIRBlocks(unittest.TestCase):
             2: set([3, 4]),
             3: set([5]),
             4: set([5]),
-            5: set([-1])
+            5: set()
         })
 
     def test_dominator_sets(self):
@@ -330,10 +334,11 @@ class TestIRBlocks(unittest.TestCase):
     def test_dominance_frontier(self):
         cfg = {
             0: set([1]),
-            1: set([-1, 2]),
+            1: set([5, 2]),
             2: set([3, 4]),
             3: set([4]),
-            4: set([1]) }
+            4: set([1]),
+            5: set() }
         df = dominance_frontier(cfg)
         self.assertEqual(df, {
             0: set(),
@@ -357,7 +362,6 @@ class TestIRBlocks(unittest.TestCase):
         cfg = control_flow_graph(bblocks)
         lives = block_liveness2(bblocks, cfg)
         self.assertEqual(lives, {
-            -1: set(),
             0: set(),
             1: set(['REG4', 'REG5']),
             2: set(['REG4', 'REG5']),

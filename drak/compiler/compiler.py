@@ -119,14 +119,14 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     ctx.functions[fn_name] = [ret_type] + [t[1] for t in typed_params]
     fnctx.functions = ctx.functions.copy()
 
-    asm = [[f'{fn_name}:']]
+    asm = [['funcdef', fn_name] + [f'REGF{i}' for i in range(len(typed_params))]] # TODO: ugly
     asm.append(['push', ['r4-r12', 'lr']])
 
     for i, (arg, argtype) in enumerate(typed_params):
         if argtype not in [IntType, BoolType]:
             print(f'Error, cannot handle type {argtype} yet')
         reg = fnctx.get_free_reg(asm)
-        asm.append(['mov', f'REG{reg}', f'r{i}'])
+        asm.append(['mov', f'REG{reg}', f'REGF{i}'])
         fnctx.symbols[arg] = Symbol(argtype, reg)
 
     for sub_stmt in body:
@@ -135,7 +135,7 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     asm += [[f'.{fn_name}_end:'],
              ['add', 'sp', 'sp', f'#{fnctx.stack_used}'],
              ['pop', ['r4-r12', 'lr']],
-             ['bx', 'lr']]
+             ['bx', 'lr'] + (['REGF0'] if ret_type.base_type != 'none' else [])]
 
     return asm
 
@@ -222,7 +222,7 @@ def compile_statement(stmt: AstNode, ctx: FnContext) -> Asm:
     elif stmt.token_id() == TokenId.RETURN:
         ret_reg = ctx.get_free_reg(asm)
         type = compile_expression(stmt.children[0], ret_reg, ctx, asm)
-        asm.append(['mov', 'r0', f'REG{ret_reg}'])
+        asm.append(['mov', 'REGF0', f'REG{ret_reg}'])
         asm.append(['b', f'.{ctx.function}_end'])
         ctx.release_reg(ret_reg, asm)
 
@@ -270,6 +270,12 @@ def intermediate_to_asm(ilblock: List[Asm]):
             return '{' + subops + '}'
         return op
     def instr_to_asm(instr: Asm) -> str:
+        if instr[0] == 'funcdef':
+            instr = [instr[1] + ':']
+        elif instr[0] == 'bl':
+            instr = instr[0:2]
+        elif instr[0] == 'bx' and instr[1] == 'lr':
+            instr = instr[0:2]
         if len(instr) == 1:
             return instr[0]
         return f'{instr[0]} {", ".join(op2asm(op) for op in instr[1:])}'
