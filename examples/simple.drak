@@ -1,0 +1,14 @@
+def main(): int {
+    evenSum: int = 0;
+    i: int = 0;
+
+    while i < 10 {
+        if i == 5 {
+            evenSum = evenSum + i;
+        }
+
+        i = i + 1;
+    }
+ 
+    return evenSum + i;
+}

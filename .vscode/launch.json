@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "compile drak thing",
+            "type": "python",
+            "request": "launch",
+            "program": "drakc.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["-C", "examples/nth_digit.drak"]
+        },
+        {
+            "name": "Unit Tests",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        },
+        {
+            "name": "interpret test.drak",
+            "type": "python",
+            "request": "launch",
+            "program": "drak_interpreter.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["test.drak"]
+        },
+    ],
+}
