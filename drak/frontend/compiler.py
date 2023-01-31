@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 from typing import List
-from drak.parser.utils import AstNode, TokenId, Token
-from drak.parser.parser import parse
+from drak.frontend.utils import AstNode, TokenId, Token
+from drak.frontend.parser import parse
 
-from drak.compiler.structures import *
-from drak.compiler.expression import compile_expression
-from drak.compiler.idtype import IdType, IntType, BoolType
+from drak.frontend.structures import *
+from drak.frontend.expression import compile_expression
+from drak.frontend.idtype import IdType, IntType, BoolType
 
 # Intrinsics
 asm_prolog = [

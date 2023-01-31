@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 from typing import List
-from drak.parser.utils import AstNode, Token, TokenId
-from drak.parser.parser import parse
+from drak.frontend.utils import AstNode, Token, TokenId
+from drak.frontend.parser import parse
 
 op_map = {
     TokenId.OP_PLUS: lambda x, y: x + y,

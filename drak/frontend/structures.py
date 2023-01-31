@@ -1,6 +1,6 @@
 from typing import List, Dict, NamedTuple
-from drak.parser.utils import *
-from drak.compiler.idtype import IdType
+from drak.frontend.utils import *
+from drak.frontend.idtype import IdType
 
 Asm = List[str]
 Reg = int

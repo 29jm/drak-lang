@@ -1,6 +1,6 @@
-from drak.parser.utils import TokenId
-from drak.compiler.structures import *
-from drak.compiler.idtype import IntType, BoolType
+from drak.frontend.utils import TokenId
+from drak.frontend.structures import *
+from drak.frontend.idtype import IntType, BoolType
 
 def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm) -> str:
     if stmt.token_id() == TokenId.NUMBER:

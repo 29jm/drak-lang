@@ -3,7 +3,7 @@
 from __future__ import annotations
 from functools import reduce
 from typing import List, Tuple, Set, Dict
-from drak.compiler.ir_utils import *
+from drak.middle_end.ir_utils import *
 
 def GEN(instr: Instr) -> Set[str]:
     return set(vars_read_by(instr))
@@ -110,19 +110,6 @@ def block_liveness2(bblocks: List[List[Instr]], cfg: BGraph) -> Set[int, Set[str
 
     return in_states
 
-def interference_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
-    nodes: Dict[str, Set[str]] = {}
-
-    # Initialize all nodes to no links
-    for var in reduce(lambda a, b: a | b, lifetimes):
-        nodes[var] = set()
-
-    # Compute links
-    for alive_together in lifetimes:
-        for var in alive_together:
-            nodes[var] |= alive_together - set([var])
-    
-    return nodes
 
 def coalesce(bblocks: List[Instr], igraph: Dict[str, Set[str]]) -> List[List[Instr]]:
     """Coalesce copies that don't interfere."""
@@ -167,7 +154,16 @@ def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
         simplified.append(block)
     return simplified
 
-def global_igraph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
+def interference_graph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
+    def make_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
+        nodes: Dict[str, Set[str]] = {}
+        for var in reduce(lambda a, b: a | b, lifetimes):
+            nodes[var] = set()
+        for alive_together in lifetimes:
+            for var in alive_together:
+                nodes[var] |= alive_together - set([var])
+        return nodes
+
     # Build full interference graph
     cfg = control_flow_graph(bblocks)
     glob_lifetimes = block_liveness2(bblocks, cfg)
@@ -177,7 +173,7 @@ def global_igraph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
         for succ in cfg[n]:
             out_live |= glob_lifetimes[succ]
         in_block_lifetimes.extend(liveness(block, out_live))
-    igraph = interference_graph(in_block_lifetimes)
+    igraph = make_graph(in_block_lifetimes)
     return igraph
 
 if __name__ == '__main__':

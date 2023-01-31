@@ -2,11 +2,12 @@
 
 import argparse as arg
 from pathlib import Path
-import drak.parser.parser as parser
-import drak.compiler.compiler as compiler
-import drak.compiler.liveness as liveness
-import drak.compiler.ir_utils as ir_utils
-import drak.compiler.coloring as coloring
+import drak.frontend.parser as parser
+import drak.frontend.compiler as compiler
+import drak.middle_end.liveness as liveness
+import drak.middle_end.ir_utils as ir_utils
+import drak.middle_end.ssa as ssa
+import drak.middle_end.coloring as coloring
 import subprocess
 
 def compile(source: Path, dest: Path, args):
@@ -21,11 +22,11 @@ def compile(source: Path, dest: Path, args):
             cfg = ir_utils.control_flow_graph(bblocks)
             lifetimes = liveness.block_liveness2(bblocks, cfg)
             domf = ir_utils.dominance_frontier(cfg)
-            bblocks = ir_utils.phi_insertion(bblocks, cfg, domf, lifetimes)
-            bblocks = ir_utils.renumber_variables(bblocks, cfg)
-            bblocks = ir_utils.simpliphy(bblocks)
+            bblocks = ssa.phi_insertion(bblocks, cfg, domf, lifetimes)
+            bblocks = ssa.renumber_variables(bblocks, cfg)
+            bblocks = ssa.simpliphy(bblocks)
 
-            igraph = liveness.global_igraph(bblocks)
+            igraph = liveness.interference_graph(bblocks)
             bblocks = liveness.coalesce(bblocks, igraph)
 
             bblocks = coloring.regalloc(bblocks, set([f'r{i}' for i in range(4, 13)]))

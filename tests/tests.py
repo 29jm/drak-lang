@@ -1,7 +1,12 @@
 import unittest
 import copy
-from drak.compiler.ir_utils import *
-from drak.compiler.liveness import *
+from drak.middle_end.ir_utils import *
+from drak.middle_end.liveness import *
+from drak.middle_end.ssa import *
+
+"""
+TODO: Split this file into smaller, module-sized test files.
+"""
 
 class TestIRReadWrite(unittest.TestCase):
     def test_push_written(self):
