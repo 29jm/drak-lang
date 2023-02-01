@@ -59,7 +59,7 @@ def liveness(blocks: List[Instr], out_live: Set[str]=set()) -> List[Set[str]]:
         killed = KILL(block)
         live = (live - killed) | alived
         livetimes.append(live)
-    
+
     return list(reversed(livetimes))
 
 def block_liveness(bblocks: List[List[Instr]], cfg: BGraph) -> Dict[int, Set[str]]:
@@ -139,22 +139,7 @@ def coalesce(bblocks: List[Instr], igraph: Dict[str, Set[str]]) -> List[List[Ins
 
     return bblocks
 
-def simplify(blocks: List[Instr], blives: BLives) -> List[Instr]:
-    """Deletes:
-        - 'movlike a, a'
-        - 'movlike a, <whatever>' when a is dead everywhere
-    """
-    simplified = []
-    for block in blocks:
-        a, b = vars_written_by(block), vars_read_by(block)
-        if block[0] == 'mov' and a and b and len(b) == 1 and len(a) == 1 and a[0] == b[0]:
-            continue
-        elif a and len(a) == 1 and not any(a[0] in life for life in blives):
-            continue
-        simplified.append(block)
-    return simplified
-
-def interference_graph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
+def interference_graph(bblocks: List[List[Instr]], cfg: BGraph) -> Dict[str, Set[str]]:
     def make_graph(lifetimes: List[Set[str]]) -> Dict[str, Set[str]]:
         nodes: Dict[str, Set[str]] = {}
         for var in reduce(lambda a, b: a | b, lifetimes):
@@ -164,17 +149,20 @@ def interference_graph(bblocks: List[List[Instr]]) -> Dict[str, Set[str]]:
                 nodes[var] |= alive_together - set([var])
         return nodes
 
-    # Build full interference graph
-    cfg = control_flow_graph(bblocks)
+    # Compute global lifetimes knowledge
     glob_lifetimes = block_liveness2(bblocks, cfg)
+
+    # Compute local lifetimes knowledge, aided by the global one
     in_block_lifetimes: List[Set[str]] = []
     for n, block in enumerate(bblocks):
         out_live = set()
         for succ in cfg[n]:
             out_live |= glob_lifetimes[succ]
         in_block_lifetimes.extend(liveness(block, out_live))
-    igraph = make_graph(in_block_lifetimes)
-    return igraph
 
-if __name__ == '__main__':
-    pass
+    return make_graph(in_block_lifetimes)
+
+def optimize_lifetimes(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Instr]]:
+    igraph = interference_graph(bblocks, cfg)
+
+    return coalesce(bblocks, igraph)

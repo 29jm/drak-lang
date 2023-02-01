@@ -1,5 +1,5 @@
 from typing import Dict, Set, List, TypeVar
-from drak.middle_end.ir_utils import Instr, vars_written_by, vars_read_by, is_fixed_alloc_variable, get_fixed_alloc_register
+from drak.middle_end.ir_utils import *
 from drak.middle_end.liveness import interference_graph, rename
 
 T = TypeVar("T")
@@ -71,13 +71,13 @@ def spillcosts(bblocks: List[List[Instr]], vars: set) -> Dict[str, int]:
                     costs[var] += 1000
     return costs
 
-def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
+def regalloc(bblocks: List[List[Instr]], cfg: BGraph, regs: Set[str]) -> List[List[Instr]]:
     """"Allocates registers in @regs to variables in @bblocks, given the interference
     graph in @graph.
     """
     done: bool = False
     spills: List[str] = []
-    graph = interference_graph(bblocks)
+    graph = interference_graph(bblocks, cfg)
     fixed_colors: Dict[str, str] = {}
 
     for node, deps in graph.items():
@@ -108,7 +108,7 @@ def regalloc(bblocks: List[List[Instr]], regs: Set[str]) -> List[List[Instr]]:
         bblocks = spillvars(bblocks, spills)
 
     # Recompute and recolor the graph
-    graph = interference_graph(bblocks)
+    graph = interference_graph(bblocks, cfg)
     coloring = color(graph, regs, fixed_colors)
     if coloring == None:
         return regalloc(bblocks, regs)

@@ -8,29 +8,31 @@ import drak.middle_end.liveness as liveness
 import drak.middle_end.ir_utils as ir_utils
 import drak.middle_end.ssa as ssa
 import drak.middle_end.coloring as coloring
+import drak.middle_end.graph_ops as graph_ops
 import subprocess
 
 def compile(source: Path, dest: Path, args):
     with open(source, 'r') as src, open(dest, 'w') as dst:
         toks = parser.parse(src.read())
-
         il = compiler.compile(toks)
         output = ""
+
         for func in il:
-            # print(func[0])
             bblocks = ir_utils.basic_blocks(func)
-            cfg = ir_utils.control_flow_graph(bblocks)
-            lifetimes = liveness.block_liveness2(bblocks, cfg)
-            domf = ir_utils.dominance_frontier(cfg)
-            bblocks = ssa.phi_insertion(bblocks, cfg, domf, lifetimes)
-            bblocks = ssa.renumber_variables(bblocks, cfg)
-            bblocks = ssa.simpliphy(bblocks)
+            cfg = graph_ops.control_flow_graph(bblocks)
 
-            igraph = liveness.interference_graph(bblocks)
-            bblocks = liveness.coalesce(bblocks, igraph)
+            # SSA pass
+            bblocks = ssa.ssa(bblocks, cfg)
 
-            bblocks = coloring.regalloc(bblocks, set([f'r{i}' for i in range(4, 13)]))
+            # Live variable analysis and optimization
+            bblocks = liveness.optimize_lifetimes(bblocks, cfg)
+
+            # Coloring the IR
+            bblocks = coloring.regalloc(bblocks, cfg, set([f'r{i}' for i in range(4, 13)]))
+
+            # Transform to final assembly
             output += ''.join(compiler.intermediate_to_asm(block) for block in bblocks)
+
             if args.cfg:
                 lifetimes2 = liveness.block_liveness2(bblocks, cfg)
                 dot_non_alloc = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes2)

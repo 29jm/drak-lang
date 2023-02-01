@@ -1,6 +1,8 @@
 from typing import Dict, List, Set
 from functools import reduce
 from drak.middle_end.ir_utils import *
+from drak.middle_end.graph_ops import *
+from drak.middle_end.liveness import block_liveness2
 
 def renumber_instr_ops(instr: Instr, ops: List[int], src: str, dst: str) -> Instr:
     for idx in ops:
@@ -18,7 +20,7 @@ def renumber_written(instr: Instr, src: str, dst: str) -> Instr:
 def renumber_read(instr: Instr, src: str, dst: str) -> Instr:
     return renumber_instr_ops(instr, ops_read_by(instr), src, dst)
 
-def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes: Dict[int, Set[str]]) -> List[List[Instr]]:
+def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, lifetimes: Dict[int, Set[str]]) -> List[List[Instr]]:
     """Inserts phi functions into the basic blocks of a function, with correct number
     of arguments, given the control flow graph, its dominance frontier and the
     live ranges of variables live across blocks.
@@ -37,6 +39,7 @@ def phi_insertion(bblocks: List[List[Instr]], cfg: BGraph, df: BGraph, lifetimes
             else:
                 defsites[var].add(n)
     globs = reduce(lambda x, y: x | y, lifetimes.values(), set())
+    df = dominance_frontier(cfg)
     for var in set(defsites.keys()) & globs:
         W = defsites[var]
         while W:
@@ -93,7 +96,7 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
                 stacks[noprefix(var)].pop()
         return bblocks
 
-    domtree = dominator_tree(immediate_dominators(cfg))
+    domtree = dominator_tree(cfg)
     varlist = set()
     counts: Dict[str, int] = {}
     stacks: Dict[str, List[int]] = {}
@@ -138,4 +141,14 @@ def simpliphy(bblocks: List[List[Instr]]) -> List[List[Instr]]:
             # Delete the phi function assignment
             block.pop(i)
             # Intentionally don't increment `i`
+    return bblocks
+
+def ssa(bblocks: List[List[Instr]], cfg: BGraph, lifetimes: BLives=None) -> List[List[Instr]]:
+    if lifetimes == None:
+        lifetimes = block_liveness2(bblocks, cfg)
+
+    bblocks = phi_insertion(bblocks, cfg, lifetimes)
+    bblocks = renumber_variables(bblocks, cfg)
+    bblocks = simpliphy(bblocks)
+
     return bblocks

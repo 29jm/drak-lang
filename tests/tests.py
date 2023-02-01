@@ -381,7 +381,7 @@ class TestIRBlocks(unittest.TestCase):
         cfg = control_flow_graph(bblocks)
         df = dominance_frontier(cfg)
         lifetimes = block_liveness2(bblocks, cfg)
-        phi_inserted = phi_insertion(bblocks, cfg, df, lifetimes)
+        phi_inserted = phi_insertion(bblocks, cfg, lifetimes)
         phi_instr = phi_inserted[3][1]
         self.assertEqual(phi_instr[0], 'PHI')
         self.assertEqual(phi_instr[1], 'REG4')
@@ -444,7 +444,7 @@ class TestIRBlocks(unittest.TestCase):
         bblocks = basic_blocks(copy.deepcopy(self.simple_phi))
         cfg = control_flow_graph(bblocks)
         lifetimes = block_liveness2(bblocks, cfg)
-        with_phis = phi_insertion(bblocks, cfg, dominance_frontier(cfg), lifetimes)
+        with_phis = phi_insertion(bblocks, cfg, lifetimes)
         ren = renumber_variables(with_phis, cfg)
         self.assertTrue(True)
 
@@ -453,7 +453,7 @@ class TestIRBlocks(unittest.TestCase):
         cfg = control_flow_graph(bblocks)
         df = dominance_frontier(cfg)
         lifetimes = block_liveness2(bblocks, cfg)
-        phi_inserted = phi_insertion(bblocks, cfg, df, lifetimes)
+        phi_inserted = phi_insertion(bblocks, cfg, lifetimes)
         ren = renumber_variables(phi_inserted, cfg)
         phi_solved = simpliphy(ren)
         pass
