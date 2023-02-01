@@ -130,9 +130,9 @@ def is_local_jump(block: List[Instr], instr: Instr) -> bool:
     if not is_jumping(instr):
         return False
 
-    for ins in block[1:]: # Don't consider first instruction: it's the function label
-        if (m := re.match(regex_label, ins[0])):
-            if m.group(1) == instr[1]:
+    for ins in block:
+        if is_jump_label(ins[0]):
+            if get_jump_label(ins[0]) == instr[1]:
                 return True
 
     return False
