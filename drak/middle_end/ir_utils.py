@@ -82,6 +82,12 @@ def ops_written_by(instr: Instr) -> List[int]:
             return []
     return indices[1:2]
 
+def is_jump_label(asm: str) -> bool:
+    return re.fullmatch(regex_label, asm) != None
+
+def get_jump_label(asm: str) -> str:
+    return re.fullmatch(regex_label, asm).group(1)
+
 def is_fixed_alloc_variable(var: str) -> bool:
     """Returns whether the variable is fixed to a register."""
     return re.fullmatch(regex_fixed_var, var)
@@ -130,59 +136,6 @@ def is_local_jump(block: List[Instr], instr: Instr) -> bool:
                 return True
 
     return False
-
-def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
-    """Returns the block indices of the successors of block `block_no`.
-    By convention, the last block, and maybe deadcode, will have no successor."""
-    instr = bblocks[block_no][-1]
-
-    block_labels = []
-    for b in bblocks:
-        for ins in b:
-            if (m := re.match(regex_label, ins[0])):
-                block_labels.append(m.group(1))
-
-    if not is_jumping(instr):
-        return set([block_no + 1])
-    elif instr[0] == 'bx': # Return from function
-        return set()
-    elif not instr[1] in block_labels:
-        return set([block_no + 1])
-    else: # Jump to label, conditional or not
-        is_conditional = is_conditional_jump(instr)
-        target_label = instr[1]
-        for i, block in enumerate(bblocks): # Search for blocks starting with `target_label`
-            lead_instr = block[0]
-            if ':' in lead_instr[0] and lead_instr[0].split(':')[0] == target_label:
-                if is_conditional:
-                    return set([i, block_no + 1])
-                return set([i])
-    print('Error, successor(s) not found')
-
-def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
-    """Cuts up a function into basic blocks."""
-    leader_indices: List[int] = [0]
-    blocks: List[List[Instr]] = []
-
-    # Compute leaders
-    for i, instr in enumerate(func_block):
-        # First instruction is a leader (already included)
-        if i == 0:
-            pass
-        # Targets of a jump are leaders
-        elif re.match(regex_label, instr[0]):
-            leader_indices.append(i)
-        # Instructions following jumps are leaders
-        elif is_local_jump(func_block, func_block[i-1]):
-            leader_indices.append(i)
-
-    # Build blocks
-    for i in range(len(leader_indices) - 1):
-        l, next_l = leader_indices[i], leader_indices[i + 1]
-        blocks.append(func_block[l:next_l])
-    blocks.append(func_block[leader_indices[-1]:])
-
-    return blocks
 
 def definitions_in_block(bblock: List[Instr]) -> Set[str]:
     defs = set()

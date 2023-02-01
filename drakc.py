@@ -18,7 +18,7 @@ def compile(source: Path, dest: Path, args):
         output = ""
 
         for func in il:
-            bblocks = ir_utils.basic_blocks(func)
+            bblocks = graph_ops.basic_blocks(func)
             cfg = graph_ops.control_flow_graph(bblocks)
 
             # SSA pass
@@ -27,7 +27,7 @@ def compile(source: Path, dest: Path, args):
             # Live variable analysis and optimization
             bblocks = liveness.optimize_lifetimes(bblocks, cfg)
 
-            # Coloring the IR
+            # Coloring the IR: first step to assembly
             bblocks = coloring.regalloc(bblocks, cfg, set([f'r{i}' for i in range(4, 13)]))
 
             # Transform to final assembly
@@ -35,14 +35,14 @@ def compile(source: Path, dest: Path, args):
 
             if args.cfg:
                 lifetimes2 = liveness.block_liveness2(bblocks, cfg)
-                dot_non_alloc = ir_utils.print_cfg_as_dot(cfg, bblocks, lifetimes2)
+                dot_non_alloc = graph_ops.print_cfg_as_dot(cfg, bblocks, lifetimes2)
                 svg = subprocess.run(['dot', '-Tsvg'], text=True, input=dot_non_alloc, stdout=subprocess.PIPE)
                 subprocess.run(['display', '-resize', '800x600'], text=True, input=svg.stdout)
 
         dst.write(output)
 
         if args.emit_only:
-            print('\n'.join(('\n\t'.join(str(line) for line in block)) for block in il))
+            print(output)
 
     name_asm = (dest.parent / dest.stem).with_suffix('.asm')
     name_o = (dest.parent / dest.stem).with_suffix('.o')

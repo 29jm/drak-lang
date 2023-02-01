@@ -1,7 +1,61 @@
 from typing import List, Dict, Set
-import itertools
-import drak.middle_end.ir_utils as ir_utils
 from drak.middle_end.ir_utils import Instr, BGraph
+import drak.middle_end.ir_utils as ir_utils
+import itertools
+import re
+
+def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
+    """Returns the block indices of the successors of block `block_no`.
+    By convention, the last block, and maybe deadcode, will have no successor."""
+    instr = bblocks[block_no][-1]
+
+    block_labels = []
+    for b in bblocks:
+        for ins in b:
+            if ir_utils.is_jump_label(ins[0]):
+                block_labels.append(ir_utils.get_jump_label(ins[0]))
+
+    if not ir_utils.is_jumping(instr):
+        return set([block_no + 1])
+    elif instr[0] == 'bx': # Return from function
+        return set()
+    elif not instr[1] in block_labels:
+        return set([block_no + 1])
+    else: # Jump to label, conditional or not
+        is_conditional = ir_utils.is_conditional_jump(instr)
+        target_label = instr[1]
+        for i, block in enumerate(bblocks): # Search for blocks starting with `target_label`
+            lead_instr = block[0]
+            if ':' in lead_instr[0] and lead_instr[0].split(':')[0] == target_label:
+                if is_conditional:
+                    return set([i, block_no + 1])
+                return set([i])
+    print('Error, successor(s) not found')
+
+def basic_blocks(func_block: List[Instr]) -> List[List[Instr]]:
+    """Cuts up a function into basic blocks."""
+    leader_indices: List[int] = [0]
+    blocks: List[List[Instr]] = []
+
+    # Compute leaders
+    for i, instr in enumerate(func_block):
+        # First instruction is a leader (already included)
+        if i == 0:
+            pass
+        # Targets of a jump are leaders
+        elif ir_utils.is_jump_label(instr[0]):
+            leader_indices.append(i)
+        # Instructions following jumps are leaders
+        elif ir_utils.is_local_jump(func_block, func_block[i-1]):
+            leader_indices.append(i)
+
+    # Build blocks
+    for i in range(len(leader_indices) - 1):
+        l, next_l = leader_indices[i], leader_indices[i + 1]
+        blocks.append(func_block[l:next_l])
+    blocks.append(func_block[leader_indices[-1]:])
+
+    return blocks
 
 def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
     """Computes the control flow graph of `bblocks`, represented by a dictionary
@@ -10,7 +64,7 @@ def control_flow_graph(bblocks: List[List[Instr]]) -> BGraph:
     """
     graph: Dict[int, Set[int]] = {}
     for i in range(len(bblocks)):
-        successors = ir_utils.block_successors(bblocks, i)
+        successors = block_successors(bblocks, i)
         graph[i] = set(successors)
     return graph
 

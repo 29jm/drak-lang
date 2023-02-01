@@ -4,6 +4,7 @@ from __future__ import annotations
 from functools import reduce
 from typing import List, Tuple, Set, Dict
 from drak.middle_end.ir_utils import *
+from drak.middle_end.graph_ops import predecessors
 
 def GEN(instr: Instr) -> Set[str]:
     return set(vars_read_by(instr))
