@@ -86,7 +86,7 @@ def compile_function_call(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: A
         asm.append(['mov', f'REGF{i}', f'REG{argreg}']) # F for Fixed color
         ctx.release_reg(argreg, asm)
 
-    asm.append(['bl', f'{fn_name}',
+    asm.append(['func_call', f'{fn_name}',
         [f'REGF{i}' for i in range(len(argregs))], # Parameters are marked as read
         [f'REGF{i}' for i in range(4)]]) # Assume all r0-r3 are clobbered
 

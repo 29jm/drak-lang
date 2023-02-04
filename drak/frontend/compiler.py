@@ -12,15 +12,15 @@ from drak.frontend.idtype import IdType, IntType, BoolType
 # Intrinsics
 asm_prolog = [
     [
-        ['_start:'],
+        ['func_def', '_start'],
             ['.global', '_start'],
-            ['bl', 'main'],
+            ['func_call', 'main'],
             ['mov', 'r7', '#1'],
             ['svc', '#0'], # Exit system call
-            ['bx', 'lr']   # TODO: This should be more symbolic, e.g. 'FUNC_RET(val)'
+            ['func_ret', 'r0']
     ],
     [
-        ['print_char:'],
+        ['func_def', 'print_char'],
             ['push', ['r0', 'r1', 'r2', 'r7']],
             ['mov', 'r7', '#4'], # Syscall number
             ['mov', 'r0', '#1'], # stdout, hopefully
@@ -28,7 +28,7 @@ asm_prolog = [
             ['mov', 'r2', '#1'], # str len
             ['svc', '#0'],
             ['pop', ['r0', 'r1', 'r2', 'r7']],
-            ['bx', 'lr']
+            ['func_ret']
     ]
 ]
 
@@ -119,7 +119,7 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     ctx.functions[fn_name] = [ret_type] + [t[1] for t in typed_params]
     fnctx.functions = ctx.functions.copy()
 
-    asm = [['funcdef', fn_name] + [f'REGF{i}' for i in range(len(typed_params))]] # TODO: ugly
+    asm = [['func_def', fn_name] + [f'REGF{i}' for i in range(len(typed_params))]] # TODO: ugly
     asm.append(['push', ['r4-r12', 'lr']])
 
     for i, (arg, argtype) in enumerate(typed_params):
@@ -135,7 +135,7 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     asm += [[f'.{fn_name}_end:'],
              ['add', 'sp', 'sp', f'#{fnctx.stack_used}'],
              ['pop', ['r4-r12', 'lr']],
-             ['bx', 'lr'] + (['REGF0'] if ret_type.base_type != 'none' else [])]
+             ['func_ret', 'REGF0']]
 
     return asm
 
@@ -240,46 +240,6 @@ def compile(prog: List[AstNode]) -> List[List[Asm]]:
         asm += [compile_statement(stmt, ctx)]
 
     return asm
-
-def compile_to_asm(prog: List[AstNode], strip=False) -> str:
-    return __raw_printer(compile(prog), strip_comments=strip)
-
-def __inline_asm_printer(asm) -> str:
-    header = "__asm__ volatile ("
-    body = '\n'.join(f"\"{line}\\n\"" for line in asm)
-    footer = ");"
-    return header + body + footer
-
-def __raw_printer(asm, strip_comments=False) -> str:
-    def _indent(line: str) -> str:
-        ls = line.strip()
-        comment = ls.find('//')
-        if strip_comments and comment != -1:
-            ls = ls[:comment].strip()
-        if ls and not ls.endswith(':') and not ls.startswith('.'):
-            return '    ' + ls
-        return ls
-    asm = (_indent(line) for line in asm)
-    asm = [line for line in asm if line.strip() != ""]
-    return '\n'.join(_indent(line) for line in asm) + '\n'
-
-def intermediate_to_asm(ilblock: List[Asm]):
-    def op2asm(op):
-        if isinstance(op, list):
-            subops = ', '.join(str(subop) for subop in op)
-            return '{' + subops + '}'
-        return op
-    def instr_to_asm(instr: Asm) -> str:
-        if instr[0] == 'funcdef':
-            instr = [instr[1] + ':']
-        elif instr[0] == 'bl':
-            instr = instr[0:2]
-        elif instr[0] == 'bx' and instr[1] == 'lr':
-            instr = instr[0:2]
-        if len(instr) == 1:
-            return instr[0]
-        return f'{instr[0]} {", ".join(op2asm(op) for op in instr[1:])}'
-    return __raw_printer([instr_to_asm(ins) for ins in ilblock])
 
 if __name__ == '__main__':
     from sys import argv

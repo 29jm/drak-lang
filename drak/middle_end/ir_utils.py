@@ -47,18 +47,16 @@ def ops_read_by(instr: Instr) -> List[int]:
             return indices[2:]
     elif instr[0] == 'str':
         return [1]
-    elif instr[0] == 'funcdef':
+    elif instr[0] == 'func_def':
+        return []
+    elif instr[0] == 'func_ret':
+        return indices[1:]
+    elif instr[0] == 'func_call': # func_call [args], [clobbered]
+        return indices[2:3]
+    elif instr[0] == 'bl':
         return []
     elif instr[0] == 'bx':
-        if instr[1] == 'lr' and len(instr) > 2:
-            return indices[2:]
-        else:
-            return indices[1:]
-    elif instr[0] == 'bl':
-        if len(indices) >= 3:
-            return indices[2:3]
-        else:
-            return []
+        return indices[1:]
     return indices[2:]
 
 def ops_written_by(instr: Instr) -> List[int]:
@@ -67,19 +65,18 @@ def ops_written_by(instr: Instr) -> List[int]:
     be assumed that all variables in those lists are being written to.
     """
     indices = list(range(len(instr)))
-    if instr[0] in ['cmp', 'push']:
+    if instr[0] in ['cmp', 'push', 'bl']:
         return []
     elif instr[0] == 'pop':
         return indices[1:]
     elif instr[0] == 'str':
         return indices[2:]
-    elif instr[0] == 'funcdef':
+    elif instr[0] == 'func_def':
         return indices[2:]
-    elif instr[0] == 'bl':
-        if len(indices) >= 4:
-            return indices[3:4]
-        else:
-            return []
+    elif instr[0] == 'func_ret':
+        return []
+    elif instr[0] == 'func_call':
+        return indices[3:]
     return indices[1:2]
 
 def is_jump_label(asm: str) -> bool:
@@ -96,18 +93,18 @@ def get_fixed_alloc_register(var: str) -> str:
     """Returns the register allocated to the fixed allocation variable."""
     return 'r' + re.fullmatch(regex_fixed_var, var).group(1)
 
-def vars_read_by(instr: Instr, include_fixed=True) -> List[str]:
+def vars_read_by(instr: Instr, exclude_fixed=False) -> List[str]:
     """Returns registers read by @instr."""
     varlist = vars_in(instr[op] for op in ops_read_by(instr))
-    if not include_fixed:
-        return filter(is_fixed_alloc_variable, varlist)
+    if exclude_fixed:
+        return list(filter(lambda x: not is_fixed_alloc_variable(x), varlist))
     return varlist
 
-def vars_written_by(instr: Instr, include_fixed=True) -> List[str]:
+def vars_written_by(instr: Instr, exclude_fixed=False) -> List[str]:
     """Returns registers written to by @instr."""
     varlist = vars_in(instr[op] for op in ops_written_by(instr))
-    if not include_fixed:
-        return filter(is_fixed_alloc_variable, varlist)
+    if exclude_fixed:
+        return list(filter(lambda x: not is_fixed_alloc_variable(x), varlist))
     return varlist
 
 def is_copy_instruction(instr: Instr) -> bool:
@@ -120,7 +117,7 @@ def is_conditional_jump(instr: Instr) -> bool:
     return any(instr[0] == 'b'+cond for cond in suffixes)
 
 def is_jumping(instr: Instr) -> bool:
-    jumps = ['b', 'bx', 'blx', 'bl']
+    jumps = ['b', 'bx', 'blx', 'bl', 'func_call', 'func_ret']
     return instr[0] in jumps or is_conditional_jump(instr)
 
 def is_local_jump(block: List[Instr], instr: Instr) -> bool:

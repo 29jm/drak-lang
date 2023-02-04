@@ -5,10 +5,10 @@ from pathlib import Path
 import drak.frontend.parser as parser
 import drak.frontend.compiler as compiler
 import drak.middle_end.liveness as liveness
-import drak.middle_end.ir_utils as ir_utils
 import drak.middle_end.ssa as ssa
 import drak.middle_end.coloring as coloring
 import drak.middle_end.graph_ops as graph_ops
+import drak.backend.arm_converter as backend
 import subprocess
 
 def compile(source: Path, dest: Path, args):
@@ -31,7 +31,7 @@ def compile(source: Path, dest: Path, args):
             bblocks = coloring.regalloc(bblocks, cfg, set([f'r{i}' for i in range(4, 13)]))
 
             # Transform to final assembly
-            output += ''.join(compiler.intermediate_to_asm(block) for block in bblocks)
+            output += ''.join(backend.intermediate_to_asm(block) for block in bblocks)
 
             if args.cfg:
                 lifetimes2 = liveness.block_liveness2(bblocks, cfg)

@@ -2,11 +2,11 @@ from typing import List, Dict, Set
 from drak.middle_end.ir_utils import Instr, BGraph
 import drak.middle_end.ir_utils as ir_utils
 import itertools
-import re
 
 def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
     """Returns the block indices of the successors of block `block_no`.
-    By convention, the last block, and maybe deadcode, will have no successor."""
+    By convention, the last block, and maybe deadcode, will have no successor.
+    """
     instr = bblocks[block_no][-1]
 
     block_labels = []
@@ -17,17 +17,16 @@ def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
 
     if not ir_utils.is_jumping(instr):
         return set([block_no + 1])
-    elif instr[0] == 'bx': # Return from function
+    elif instr[0] == 'func_ret':
         return set()
     elif not instr[1] in block_labels:
         return set([block_no + 1])
     else: # Jump to label, conditional or not
-        is_conditional = ir_utils.is_conditional_jump(instr)
         target_label = instr[1]
         for i, block in enumerate(bblocks): # Search for blocks starting with `target_label`
-            lead_instr = block[0]
-            if ':' in lead_instr[0] and lead_instr[0].split(':')[0] == target_label:
-                if is_conditional:
+            ins = block[0][0] # First part of first instruction of block
+            if ir_utils.is_jump_label(ins) and ir_utils.get_jump_label(ins) == target_label:
+                if ir_utils.is_conditional_jump(instr):
                     return set([i, block_no + 1])
                 return set([i])
     print('Error, successor(s) not found')
@@ -78,7 +77,7 @@ def predecessors(cfg: BGraph, block: int) -> Set[int]:
 def dominator_sets(cfg: BGraph) -> BGraph:
     N = set(cfg.keys())
     root = set([0])
-    doms = {0: root} # CFG root dominates itself
+    doms = {0: root} # CFG root dominates itself. Kinky mf.
     doms.update({block_idx: N for block_idx in N - root})
     updated = True # Make up for the lack of do-while loops
 

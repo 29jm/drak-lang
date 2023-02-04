@@ -11,7 +11,7 @@
             "program": "drakc.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["-C", "examples/nth_digit.drak"]
+            "args": ["examples/test3.drak"]
         },
         {
             "name": "Unit Tests",

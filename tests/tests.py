@@ -165,6 +165,34 @@ class TestIRReadWrite(unittest.TestCase):
         instr = ['bx', 'REG5']
         self.assertEqual(vars_read_by(instr), ['REG5'])
 
+    def test_func_call_read(self):
+        instr = ['func_call', 'main', ['REGF0', 'REGF5']]
+        self.assertEqual(vars_read_by(instr), ['REGF0', 'REGF5'])
+        instr = ['func_call', 'test', ['REGF0', 'REGF1'], ['REGF0', 'REGF1', 'REGF2']]
+        self.assertEqual(vars_read_by(instr), ['REGF0', 'REGF1'])
+        instr = ['func_call', '_start', [], ['REGF0']]
+        self.assertEqual(vars_read_by(instr), [])
+
+    def test_func_call_written(self):
+        instr = ['func_call', 'main', ['REGF0', 'REGF5']]
+        self.assertEqual(vars_written_by(instr), [])
+        instr = ['func_call', 'test', ['REGF0', 'REGF1'], ['REGF0', 'REGF1', 'REGF2']]
+        self.assertEqual(vars_written_by(instr), ['REGF0', 'REGF1', 'REGF2'])
+        instr = ['func_call', '_start', [], ['REGF0']]
+        self.assertEqual(vars_written_by(instr), ['REGF0'])
+
+    def test_func_ret_read(self):
+        instr = ['func_ret', 'REGF0']
+        self.assertEqual(vars_read_by(instr), ['REGF0'])
+        instr = ['func_ret']
+        self.assertEqual(vars_read_by(instr), [])
+
+    def test_func_ret_written(self):
+        instr = ['func_ret', 'REGF0']
+        self.assertEqual(vars_written_by(instr), [])
+        instr = ['func_ret']
+        self.assertEqual(vars_written_by(instr), [])
+
 class TestIRClassifiers(unittest.TestCase):
     def test_is_jump(self):
         instr = ['b', '.main_end']
@@ -183,6 +211,10 @@ class TestIRClassifiers(unittest.TestCase):
         self.assertTrue(is_jumping(instr))
         instr = ['bge', '.main_if_1']
         self.assertTrue(is_jumping(instr))
+        instr = ['func_call', '_start']
+        self.assertTrue(is_jumping(instr))
+        instr = ['func_ret', 'r0']
+        self.assertTrue(is_jumping(instr))
 
     def test_is_not_jump(self):
         instr = ['bic', 'REG1', 'REG2', 'REG3']
@@ -196,7 +228,7 @@ class TestIRClassifiers(unittest.TestCase):
 
 class TestIRBlocks(unittest.TestCase):
     fnblocks = [
-        ['main:'],
+        ['func_def', 'main'],
         ['push', ['r4-r12', 'lr']],
         ['mov', 'REG4', '#76'],
         ['mov', 'REG5', 'REG4'],
@@ -219,10 +251,10 @@ class TestIRBlocks(unittest.TestCase):
         ['.main_end:'],
         ['add', 'sp', '#0'],
         ['pop', ['r4-r12', 'lr']],
-        ['bx', 'lr']]
+        ['func_ret', 'r0']]
 
     fnblocks2 = [
-        ['main:'],
+        ['func_def', 'main'],
         ['push', ['r4-r12', 'lr']],
         ['mov', 'REG4', '#0'],
         ['mov', 'REG5', '#0'],
@@ -249,10 +281,10 @@ class TestIRBlocks(unittest.TestCase):
         ['.main_end:'],
         ['add', 'sp', 'sp', '#0'],
         ['pop', ['r4-r12', 'lr']],
-        ['bx', 'lr']]
+        ['func_ret', 'r0']]
 
     simple_phi = [
-        ['main:'],
+        ['func_def', 'main'],
         ['mov', 'REG4', '#50'],
         ['cmp', 'REG4', '#3'],
         ['bne', '.main_if_1'],
@@ -264,12 +296,12 @@ class TestIRBlocks(unittest.TestCase):
         ['mov', 'r0', 'REG4'],
         ['b', '.main_end'],
         ['.main_end:'],
-        ['bx', 'lr']]
+        ['func_ret', 'r0']]
 
     def test_basic_block_1(self):
         bblocks = basic_blocks(self.fnblocks)
         self.assertEqual(bblocks, [
-            [ ['main:'], #0
+            [ ['func_def', 'main'], #0
               ['push', ['r4-r12', 'lr']],
               ['mov', 'REG4', '#76'],
               ['mov', 'REG5', 'REG4'],
@@ -292,7 +324,7 @@ class TestIRBlocks(unittest.TestCase):
             [ ['.main_end:'], # 5
               ['add', 'sp', '#0'],
               ['pop', ['r4-r12', 'lr']],
-              ['bx', 'lr']]])
+              ['func_ret', 'r0']]])
 
     def test_block_successors(self):
         bblocks = basic_blocks(self.fnblocks)

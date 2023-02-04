@@ -63,14 +63,10 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
     def rename(block):
         for i, instr in enumerate(bblocks[block]):
             if not 'PHI' in instr[0]:
-                for var in vars_read_by(instr):
-                    if is_fixed_alloc_variable(var):
-                        continue
+                for var in vars_read_by(instr, exclude_fixed=True):
                     varidx = stacks[noprefix(var)][-1]
                     bblocks[block][i] = renumber_read(instr, var, f'{var}.{varidx}')
-            for var in vars_written_by(instr):
-                if is_fixed_alloc_variable(var):
-                    continue
+            for var in vars_written_by(instr, exclude_fixed=True):
                 counts[noprefix(var)] += 1
                 varidx = counts[noprefix(var)]
                 stacks[noprefix(var)].append(varidx)
@@ -90,9 +86,7 @@ def renumber_variables(bblocks: List[List[Instr]], cfg: BGraph) -> List[List[Ins
         for child in domtree[block]:
             rename(child)
         for instr in bblocks[block]:
-            for var in vars_written_by(instr):
-                if is_fixed_alloc_variable(var):
-                    continue
+            for var in vars_written_by(instr, exclude_fixed=True):
                 stacks[noprefix(var)].pop()
         return bblocks
 
