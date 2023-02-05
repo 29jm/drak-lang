@@ -16,7 +16,6 @@ class FnContext:
     reg_to_spill: int
     symbols: Dict[str, Symbol]
     functions: List[str]
-    stack_used: int
 
     def __init__(self, func: str) -> None:
         self.function = func
@@ -24,7 +23,6 @@ class FnContext:
         self.free_register = 4 # Assume an infinity of registers 4->\infty
         self.symbols = {} # identifier -> Symbol
         self.functions = {} # func_identifier -> [arg types]
-        self.stack_used = 0
 
     def get_free_reg(self, asm: Asm) -> Reg:
         self.free_register += 1

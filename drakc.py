@@ -31,7 +31,7 @@ def compile(source: Path, dest: Path, args):
             bblocks = coloring.regalloc(bblocks, cfg, set([f'r{i}' for i in range(4, 13)]))
 
             # Transform to final assembly
-            output += ''.join(backend.intermediate_to_asm(block) for block in bblocks)
+            output += backend.func_block_to_asm(bblocks)
 
             if args.cfg:
                 lifetimes2 = liveness.block_liveness2(bblocks, cfg)

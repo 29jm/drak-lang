@@ -46,8 +46,11 @@ def instr_to_asm(instr: Instr) -> List[str]:
     return [f'{line[0]} {", ".join(operand_to_asm(op) for op in line[1:])}'
                 for line in asm]
 
-def intermediate_to_asm(ilblock: List[Instr]):
+def block_to_asm(ilblock: List[Instr]):
     asm = []
     for ins in ilblock:
         asm.extend(instr_to_asm(ins))
     return __raw_printer(asm)
+
+def func_block_to_asm(func_block: List[List[Instr]]) -> str:
+    return ''.join(block_to_asm(block) for block in func_block)

@@ -71,6 +71,7 @@ def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
     varname = stmt.token_value()
     vartype = IdType(stmt.children[0].token_value().split('[')[0])
     reg = ctx.get_free_reg(asm)
+    tmp = ctx.get_free_reg(asm)
     ctx.symbols[varname] = Symbol(vartype, reg)
 
     rhs = stmt.children[1]
@@ -82,18 +83,14 @@ def compile_declaration(stmt: AstNode, ctx: FnContext) -> Asm:
         array_size = vartype.dimensions[0] * 4 # TODO: type_of_expr function really needed
         # Allocate aligned stack, with room for array size, point it to next empty slot
         aligned = (array_size + (4 + 4) + 7) & ~7
-        asm.append(['sub', 'sp', 'sp', f'#{aligned}'])
-        asm.append(['mov', f'REG{reg}', 'sp'])
-        asm.append(['add', f'REG{reg}', f'REG{reg}', '#4'])
-        asm.append(['mov', 'r0', f'#{array_size}'])
-        asm.append(['str', 'r0', [f'REG{reg}', '#0']])
+        asm.append(['stackalloc', f'STACKID{reg}', f'#{aligned}'])
+        asm.append(['mov', f'REG{tmp}', f'#{array_size}'])
+        asm.append(['memstore', f'REG{tmp}', [f'STACKID{reg}', '#0']])
 
-        tmp = ctx.get_free_reg(asm)
         for i, val in enumerate(rhs.children):
             _ = compile_expression(val, tmp, ctx, asm)
-            asm.append(['str', f'REG{tmp}', [f'REG{reg}', f'#{4*(i+1)}']])
+            asm.append(['memstore', f'REG{tmp}', [f'STACKID{reg}', f'#{4*(i+1)}']])
         ctx.release_reg(tmp, asm)
-        ctx.stack_used += aligned
     elif vartype not in [IntType, BoolType]:
         print(f'Error, declaring {vartype}s is not yet supported')
     else:
@@ -132,7 +129,6 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
         asm += compile_statement(sub_stmt, fnctx)
 
     asm += [[f'.{fn_name}_end:'],
-             ['add', 'sp', 'sp', f'#{fnctx.stack_used}'],
              ['func_ret', 'REGF0']]
 
     return asm

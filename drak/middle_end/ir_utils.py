@@ -47,6 +47,8 @@ def ops_read_by(instr: Instr) -> List[int]:
             return indices[2:]
     elif instr[0] == 'str':
         return [1]
+    elif instr[0] == 'memstore':
+        return [1]
     elif instr[0] == 'func_def':
         return []
     elif instr[0] == 'func_ret':
@@ -70,7 +72,9 @@ def ops_written_by(instr: Instr) -> List[int]:
     elif instr[0] == 'pop':
         return indices[1:]
     elif instr[0] == 'str':
-        return indices[2:]
+        return []
+    elif instr[0] == 'memstore':
+        return []
     elif instr[0] == 'func_def':
         return indices[2:]
     elif instr[0] == 'func_ret':

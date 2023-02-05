@@ -87,6 +87,14 @@ class TestIRReadWrite(unittest.TestCase):
         instr = ['mov', 'REG5', 'REG6']
         self.assertEqual(vars_written_by(instr), ['REG5'])
 
+    def test_memstore_read(self):
+        instr = ['memstore', 'REG3', ['STACKID34', '#4']]
+        self.assertEqual(vars_read_by(instr), ['REG3'])
+
+    def test_memstore_written(self):
+        instr = ['memstore', 'REG3', ['STACKID34', '#4']]
+        self.assertEqual(vars_written_by(instr), [])
+
     def test_cmp_read(self):
         instr = ['cmp', 'r1', '#76']
         self.assertEqual(vars_read_by(instr), [])

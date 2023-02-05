@@ -1,22 +1,5 @@
-def func(enable: bool): bool {
-    if enable == true {
-        return false;
-    }
-
-    return true;
-}
-
 def main(): int {
     arr: int[] = [1, 2, 3];
-    n: int = arr[1] + 14;
-    arr[1] = 98;
-
-    bool_array: bool[] = [true, false, false];
-    bool_array[1] = true;
-
-    if func(bool_array[1]) == true {
-        return 34;
-    }
 
     return arr[1];
 }

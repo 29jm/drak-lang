@@ -16,19 +16,9 @@ def compile_expression(stmt: AstNode, target_reg: Reg, ctx: FnContext, asm: Asm)
             return # Error
         else:
             vartype, src_reg = ctx.symbols[stmt.token_value()]
-            if vartype.dimensions and stmt.children: # array type, check for indices
-                dimensions = vartype.dimensions[:] # Copy dimensions to avoid modifying type
-                offset_current = ctx.get_free_reg(asm)
-                asm.append(['mov', f'REG{target_reg}', f'REG{src_reg}'])
-                asm.append(['add', f'REG{target_reg}', f'REG{target_reg}', '#4']) # Array size is first uint32; skip it
-                for index_stmt in stmt.children:
-                    _ = compile_expression(index_stmt, offset_current, ctx, asm) # check int TODO
-                    asm.append(['add', f'REG{target_reg}', f'REG{target_reg}', f'REG{offset_current}', 'lsl #2']) # TODO size to move offset
-                    dimensions.pop(0)
-                asm.append(['ldr', f'REG{target_reg}', [f'REG{target_reg}', '#0']])
-                ctx.release_reg(offset_current, asm)
-                return IdType(vartype.base_type, dimensions)
-            elif src_reg != target_reg: # Scalars: only move things around if needed
+            if vartype.dimensions and stmt.children: # Array
+                asm.append(['memload', f'REG{target_reg}', [f'STACKID{src_reg}', f'#{42}']])
+            else:
                 asm.append(['mov', f'REG{target_reg}', f'REG{src_reg}'])
             return vartype
     elif stmt.token_id() == TokenId.FUNC_CALL:
