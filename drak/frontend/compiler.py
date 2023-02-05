@@ -20,7 +20,7 @@ asm_prolog = [
             ['func_ret', 'r0']
     ],
     [
-        ['func_def', 'print_char'],
+        ['print_char:'],
             ['push', ['r0', 'r1', 'r2', 'r7']],
             ['mov', 'r7', '#4'], # Syscall number
             ['mov', 'r0', '#1'], # stdout, hopefully
@@ -28,7 +28,7 @@ asm_prolog = [
             ['mov', 'r2', '#1'], # str len
             ['svc', '#0'],
             ['pop', ['r0', 'r1', 'r2', 'r7']],
-            ['func_ret']
+            ['bx', 'lr']
     ]
 ]
 
@@ -120,7 +120,6 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
     fnctx.functions = ctx.functions.copy()
 
     asm = [['func_def', fn_name] + [f'REGF{i}' for i in range(len(typed_params))]] # TODO: ugly
-    asm.append(['push', ['r4-r12', 'lr']])
 
     for i, (arg, argtype) in enumerate(typed_params):
         if argtype not in [IntType, BoolType]:
@@ -134,7 +133,6 @@ def compile_funcdef(stmt, ctx: FnContext) -> Asm:
 
     asm += [[f'.{fn_name}_end:'],
              ['add', 'sp', 'sp', f'#{fnctx.stack_used}'],
-             ['pop', ['r4-r12', 'lr']],
              ['func_ret', 'REGF0']]
 
     return asm

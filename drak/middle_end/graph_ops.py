@@ -17,7 +17,7 @@ def block_successors(bblocks: List[List[Instr]], block_no: int) -> Set[int]:
 
     if not ir_utils.is_jumping(instr):
         return set([block_no + 1])
-    elif instr[0] == 'func_ret':
+    elif instr[0] == 'func_ret' or instr[0:2] == ['bx', 'lr']:
         return set()
     elif not instr[1] in block_labels:
         return set([block_no + 1])

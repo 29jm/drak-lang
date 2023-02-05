@@ -5,7 +5,6 @@ from drak.middle_end.liveness import *
 
 fnblocks2 = [
     ['func_def', 'main'],
-    ['push', ['r4-r12', 'lr']],
     ['mov', 'REG4', '#0'],
     ['mov', 'REG5', '#0'],
     ['.main_while_begin_1:'],
@@ -30,7 +29,6 @@ fnblocks2 = [
     ['b', '.main_end'],
     ['.main_end:'],
     ['add', 'sp', 'sp', '#0'],
-    ['pop', ['r4-r12', 'lr']],
     ['func_ret', 'r0']]
 
 class TestLiveness(unittest.TestCase):

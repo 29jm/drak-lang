@@ -20,7 +20,7 @@ def __raw_printer(asm, strip_comments=False) -> str:
     asm = [line for line in asm if line.strip() != ""]
     return '\n'.join(_indent(line) for line in asm) + '\n'
 
-def instr_to_asm(instr: Instr) -> str:
+def instr_to_asm(instr: Instr) -> List[str]:
     def operand_to_asm(op):
         if isinstance(op, list):
             subops = ', '.join(str(subop) for subop in op)
@@ -28,22 +28,26 @@ def instr_to_asm(instr: Instr) -> str:
         return op
 
     ins, ops = instr[0], instr[1:]
-    asm = instr
+    asm = [instr]
 
     if ins == 'func_def':
-        asm = [ops[0] + ':']
+        asm = [
+            [ops[0] + ':'],
+            ['push {r4-r12, lr}']
+        ]
     elif ins == 'func_call':
-        asm = ['bl', ops[0]]
+        asm = [['bl', ops[0]]]
     elif ins == 'func_ret':
-        asm = []
+        asm = [['pop {r4-r12, lr}']]
         if ops and ops[0] != 'r0':
-            asm = ['mov', 'r0', ops[0], ';']
-        asm += ['bx', 'lr']
+            asm.append(['mov', 'r0', ops[0], ';'])
+        asm.append(['bx', 'lr'])
 
-    if len(asm) == 1:
-        return asm[0]
-
-    return f'{asm[0]} {", ".join(operand_to_asm(op) for op in asm[1:])}'
+    return [f'{line[0]} {", ".join(operand_to_asm(op) for op in line[1:])}'
+                for line in asm]
 
 def intermediate_to_asm(ilblock: List[Instr]):
-    return __raw_printer([instr_to_asm(ins) for ins in ilblock])
+    asm = []
+    for ins in ilblock:
+        asm.extend(instr_to_asm(ins))
+    return __raw_printer(asm)

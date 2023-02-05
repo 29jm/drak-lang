@@ -4,7 +4,6 @@ from drak.middle_end.graph_ops import *
 
 fnblocks = [
     ['func_def', 'main'],
-    ['push', ['r4-r12', 'lr']],
     ['mov', 'REG4', '#76'],
     ['mov', 'REG5', 'REG4'],
     ['mov', 'REG6', '#3'],
@@ -25,7 +24,6 @@ fnblocks = [
     ['b', '.main_end'],
     ['.main_end:'],
     ['add', 'sp', '#0'],
-    ['pop', ['r4-r12', 'lr']],
     ['func_ret', 'r0']]
 
 class TestIRBlocks(unittest.TestCase):
@@ -33,7 +31,6 @@ class TestIRBlocks(unittest.TestCase):
         bblocks = basic_blocks(fnblocks)
         self.assertEqual(bblocks, [
             [ ['func_def', 'main'], #0
-              ['push', ['r4-r12', 'lr']],
               ['mov', 'REG4', '#76'],
               ['mov', 'REG5', 'REG4'],
               ['mov', 'REG6', '#3'],
@@ -54,7 +51,6 @@ class TestIRBlocks(unittest.TestCase):
               ['b', '.main_end'] ],
             [ ['.main_end:'], # 5
               ['add', 'sp', '#0'],
-              ['pop', ['r4-r12', 'lr']],
               ['func_ret', 'r0']]])
 
     def test_block_successors(self):
